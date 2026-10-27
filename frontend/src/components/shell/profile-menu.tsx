@@ -65,16 +65,17 @@ export function ProfileMenu() {
         aria-expanded={open}
         aria-haspopup="true"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2.5 rounded-full py-1 pr-2 pl-1 transition-colors hover:bg-card"
+        aria-label={`Account menu for ${name}`}
+        className="flex min-h-11 items-center gap-2.5 rounded-full p-1 transition-colors hover:bg-card md:pr-2"
       >
-        <span className="grid size-8 place-items-center rounded-full bg-cobalt text-[13px] font-bold text-white">
+        <span className="grid size-9 place-items-center rounded-full bg-cobalt text-[14px] font-bold text-white">
           {name.slice(0, 1).toUpperCase()}
         </span>
         <span className="hidden text-left leading-tight md:block">
           <span className="block text-[14px] font-semibold">{name}</span>
           <span className="block text-[12px] text-muted">{detail}</span>
         </span>
-        <ChevronDown className="size-4 text-muted" aria-hidden />
+        <ChevronDown className="hidden size-4 text-muted md:block" aria-hidden />
       </button>
 
       {open && (

@@ -110,7 +110,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <ol
         aria-live="polite"
         aria-label="Notifications"
-        className="pointer-events-none fixed inset-x-3 bottom-3 z-50 flex flex-col gap-2 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:w-[380px]"
+        className="pointer-events-none fixed inset-x-3 bottom-3 z-50 flex flex-col gap-2 in-[.has-tabbar]:max-lg:bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] sm:inset-x-auto sm:right-5 sm:bottom-5 sm:w-[380px]"
       >
         {toasts.map((t) => (
           <ToastItem key={t.id} toast={t} onDismiss={() => dismiss(t.id)} />

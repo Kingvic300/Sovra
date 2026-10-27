@@ -142,6 +142,7 @@ export function shellStats(data: AppData) {
     freeUntilPayday: freeUntilPayday(data),
     daysToPayday: daysBetween(TODAY, PAYDAY),
     walletSyncedToday: wallet?.syncedAt === TODAY,
+    walletBalance: wallet?.balance ?? 0,
   };
 }
 
