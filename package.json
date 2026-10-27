@@ -1,0 +1,12 @@
+{
+  "name": "sovra",
+  "private": true,
+  "description": "Personal finance app that remembers your goals, limits and decisions. Built on Sui zkLogin, Walrus Memory and Tatum.",
+  "scripts": {
+    "install:all": "npm --prefix frontend install && npm --prefix backend install",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run start:dev",
+    "build": "npm --prefix frontend run build && npm --prefix backend run build",
+    "lint": "npm --prefix frontend run lint"
+  }
+}

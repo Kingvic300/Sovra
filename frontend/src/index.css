@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/* Sovra "Porcelain" design tokens. Reference: design/palettes.html#porcelain */
+@theme {
+  --color-porcelain: #ebf0f6;
+  --color-card: #ffffff;
+  --color-ink: #0f1b33;
+  --color-muted: #56657e;
+  --color-line: #d5dde8;
+  --color-track: #e3e9f1;
+  --color-cobalt: #2340d0;
+  --color-cobalt-deep: #1a32a8;
+  --color-cobalt-soft: #e8ecfc;
+  --color-highlighter: #ffe15a;
+  --color-signal: #4f7bff;
+  --color-gain: #0e7d57;
+  --color-gain-soft: #e3f3ec;
+  --color-caution: #b76e00;
+  --color-caution-soft: #fbf0dc;
+  --color-over: #c9323a;
+  --color-over-soft: #fbe6e7;
+
+  --font-sans: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 14px;
+  --shadow-card: 0 1px 2px rgb(15 27 51 / 0.05), 0 10px 28px -16px rgb(15 27 51 / 0.22);
+  --shadow-pop: 0 2px 4px rgb(15 27 51 / 0.06), 0 18px 40px -12px rgb(15 27 51 / 0.28);
+}
+
+@layer base {
+  html {
+    background: var(--color-porcelain);
+    color: var(--color-ink);
+  }
+  body {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-cobalt);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-highlighter);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  /* A highlighter stroke on facts Sovra has remembered. */
+  .remembered {
+    font-weight: 600;
+    padding: 0 3px;
+    margin: 0 -1px;
+    border-radius: 3px;
+    background: linear-gradient(104deg, transparent 0 2%, var(--color-highlighter) 3% 96%, transparent 98%);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  /* Hatched segment for money that is committed but not yet spent. */
+  .hatch-over {
+    background: repeating-linear-gradient(-45deg, var(--color-over) 0 3px, transparent 3px 6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
