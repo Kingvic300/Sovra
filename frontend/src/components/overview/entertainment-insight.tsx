@@ -117,7 +117,7 @@ export function EntertainmentInsight() {
   return (
     <>
       <p className="mb-4 max-w-[60ch]">
-        {ent.committedLabel} renew. That takes entertainment to {money(ent.projected, { whole: true })},{" "}
+        {ent.renewalSentence}. That takes entertainment to {money(ent.projected, { whole: true })},{" "}
         {money(ent.projected - ent.limit, { whole: true })} over the limit you set. Pausing Netflix this month keeps the
         laptop fund on track.
       </p>

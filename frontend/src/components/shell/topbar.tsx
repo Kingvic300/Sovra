@@ -68,7 +68,7 @@ export function Topbar({ stats }: { stats: ShellStats }) {
                 key={href}
                 to={href}
                 aria-current={active ? "page" : undefined}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium ${active ? "bg-ink text-white" : "text-muted"}`}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-medium pointer-coarse:py-2.5 ${active ? "bg-ink text-white" : "text-muted hover:text-ink"}`}
               >
                 {label}
               </Link>

@@ -82,7 +82,7 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
             </button>
           ))}
         </div>
-        <form onSubmit={onSubmit} className="flex items-center gap-2 rounded-full border border-line bg-card py-1.5 pr-1.5 pl-5 focus-within:border-cobalt">
+        <form onSubmit={onSubmit} className="flex items-center gap-2 rounded-full border border-field bg-card py-1.5 pr-1.5 pl-5 focus-within:border-cobalt focus-within:ring-4 focus-within:ring-cobalt/20">
           <label htmlFor="ask" className="sr-only">
             Ask Sovra
           </label>

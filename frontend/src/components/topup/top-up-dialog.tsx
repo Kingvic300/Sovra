@@ -87,13 +87,13 @@ export function TopUpDialog({ open, onClose }: { open: boolean; onClose: () => v
       <div className="flex items-center justify-between border-b border-line px-6 py-4">
         <div className="flex items-center gap-2">
           {step === "send" && (
-            <button type="button" onClick={() => setStep("method")} aria-label="Back" className="-ml-2 rounded-md p-1.5 text-muted hover:bg-porcelain hover:text-ink">
+            <button type="button" onClick={() => setStep("method")} aria-label="Back" className="-ml-2 grid size-9 place-items-center rounded-md text-muted hover:bg-porcelain hover:text-ink pointer-coarse:size-11">
               <ArrowLeft className="size-4" />
             </button>
           )}
           <h2 className="text-[17px] font-semibold">Top up your Sui wallet</h2>
         </div>
-        <button type="button" onClick={close} aria-label="Close" className="rounded-md p-1.5 text-muted hover:bg-porcelain hover:text-ink">
+        <button type="button" onClick={close} aria-label="Close" className="grid size-9 place-items-center rounded-md text-muted hover:bg-porcelain hover:text-ink pointer-coarse:size-11">
           <X className="size-4" />
         </button>
       </div>

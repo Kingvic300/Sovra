@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
 import { Remembered } from "@/components/ui/remembered";
 import { useAppData } from "@/lib/app-data";
-import { CHAT, GOALS, TODAY } from "@/lib/demo-data";
+import { CHAT, TODAY } from "@/lib/demo-data";
 import { daysBetween, money, shortDate } from "@/lib/format";
 import { useTitle } from "@/lib/use-title";
 
@@ -45,7 +45,7 @@ export default function AskPage() {
           </Panel>
           <Panel title="Goals">
             <ul className="flex flex-col gap-2 text-[14px]">
-              {GOALS.map((g) => (
+              {data.goals.map((g) => (
                 <li key={g.id} className="flex justify-between gap-3">
                   <span>{g.name}</span>
                   <span className="tabular-nums text-muted">

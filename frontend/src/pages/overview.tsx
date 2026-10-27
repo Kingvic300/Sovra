@@ -11,7 +11,6 @@ import {
   ACCOUNTS,
   BALANCE_HISTORY,
   CATEGORIES,
-  GOALS,
   TODAY,
   TRANSACTIONS,
   totalBalance,
@@ -25,11 +24,11 @@ export default function OverviewPage() {
   useTitle();
   const auth = useAuth();
   const [whole, cents] = splitMoney(totalBalance());
-  const goal = GOALS[0];
   const { data } = useAppData();
   const recent = [...data.memories].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
   const goalMemory = data.memories.find((m) => m.kind === "goal");
   const budgets = budgetViews(data);
+  const goal = data.goals[0];
 
   return (
     <div className="flex flex-col gap-5">
@@ -157,6 +156,14 @@ export default function OverviewPage() {
           </ul>
         </Panel>
 
+        {!goal ? (
+          <Panel title="Goals">
+            <p className="text-muted">No savings goal yet. Add one and Sovra checks every spending question against it.</p>
+            <Link to="/app/goals" className="mt-4 inline-block font-semibold text-cobalt hover:underline">
+              Add a goal
+            </Link>
+          </Panel>
+        ) : (
         <Panel title={goal.name}>
           <p className="text-[40px] leading-none font-extrabold tracking-[-0.03em] tabular-nums">
             {money(goal.saved, { whole: true })}{" "}
@@ -172,6 +179,7 @@ export default function OverviewPage() {
             </p>
           )}
         </Panel>
+        )}
       </div>
     </div>
   );

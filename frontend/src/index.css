@@ -7,17 +7,19 @@
   --color-ink: #0f1b33;
   --color-muted: #56657e;
   --color-line: #d5dde8;
+  /* Borders that identify a control (inputs, chips). 3:1 against card and porcelain. */
+  --color-field: #7f8ba0;
   --color-track: #e3e9f1;
   --color-cobalt: #2340d0;
   --color-cobalt-deep: #1a32a8;
   --color-cobalt-soft: #e8ecfc;
   --color-highlighter: #ffe15a;
   --color-signal: #4f7bff;
-  --color-gain: #0e7d57;
+  --color-gain: #0b6e4c;
   --color-gain-soft: #e3f3ec;
-  --color-caution: #b76e00;
+  --color-caution: #945800;
   --color-caution-soft: #fbf0dc;
-  --color-over: #c9323a;
+  --color-over: #b02a32;
   --color-over-soft: #fbe6e7;
 
   --font-sans: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;

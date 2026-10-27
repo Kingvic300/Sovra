@@ -5,6 +5,7 @@ import { useAppData } from "@/lib/app-data";
 import { MEMORY_KINDS, type Memory, type MemoryKind } from "@/lib/demo-data";
 import { shortDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
+import { Chip } from "@/components/ui/form-controls";
 
 export function MemoryList() {
   const { data, removeMemory, restoreMemory } = useAppData();
@@ -32,19 +33,11 @@ export function MemoryList() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter memories">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter memories">
         {(["all", ...kinds] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={kind === k}
-            onClick={() => setKind(k)}
-            className={`h-8 rounded-full px-3 text-[13px] font-medium transition-colors ${
-              kind === k ? "bg-ink text-white" : "bg-card text-muted hover:text-ink"
-            }`}
-          >
+          <Chip key={k} active={kind === k} onClick={() => setKind(k)}>
             {k === "all" ? "All" : MEMORY_KINDS[k]}
-          </button>
+          </Chip>
         ))}
       </div>
 
@@ -82,7 +75,7 @@ export function MemoryList() {
                 type="button"
                 onClick={() => setConfirming(m.id)}
                 aria-label={`Forget: ${m.text}`}
-                className="justify-self-start rounded-md p-1.5 text-muted transition-colors hover:bg-over-soft hover:text-over sm:justify-self-end"
+                className="grid size-9 place-items-center justify-self-start rounded-md text-muted transition-colors hover:bg-over-soft hover:text-over pointer-coarse:size-11 sm:justify-self-end"
               >
                 <Trash2 className="size-4" aria-hidden />
               </button>

@@ -1,20 +1,24 @@
+import { useState } from "react";
 import { Plus } from "lucide-react";
+import { AddGoalDialog } from "@/components/goals/add-goal-dialog";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
-import { GOALS } from "@/lib/demo-data";
+import { useAppData } from "@/lib/app-data";
 import { money, shortDate } from "@/lib/format";
 import { useTitle } from "@/lib/use-title";
 
 export default function GoalsPage() {
   useTitle("Goals");
+  const { data } = useAppData();
+  const [adding, setAdding] = useState(false);
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Goals"
         description="Sovra weighs every spending question against these. Tell it a new goal in Ask Sovra or add one here."
         action={
-          <Button>
+          <Button onClick={() => setAdding(true)}>
             <Plus className="size-4" aria-hidden />
             Add goal
           </Button>
@@ -22,7 +26,7 @@ export default function GoalsPage() {
       />
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {GOALS.map((g) => {
+        {data.goals.map((g) => {
           const pct = Math.round((g.saved / g.target) * 100);
           return (
             <article key={g.id} className="flex flex-col rounded-card bg-card p-6 shadow-card">
@@ -57,7 +61,8 @@ export default function GoalsPage() {
         })}
         <button
           type="button"
-          className="flex flex-col items-start justify-center gap-2 rounded-card border-2 border-dashed border-line p-6 text-left transition-colors hover:border-cobalt/50 hover:bg-card/60"
+          onClick={() => setAdding(true)}
+          className="flex min-h-[220px] flex-col items-start justify-center gap-2 rounded-card border-2 border-dashed border-field/60 p-6 text-left transition-colors hover:border-cobalt/50 hover:bg-card/60"
         >
           <span className="grid size-9 place-items-center rounded-full bg-cobalt-soft text-cobalt">
             <Plus className="size-5" aria-hidden />
@@ -68,6 +73,8 @@ export default function GoalsPage() {
           </span>
         </button>
       </div>
+
+      <AddGoalDialog open={adding} onClose={() => setAdding(false)} />
     </div>
   );
 }

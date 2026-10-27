@@ -31,7 +31,7 @@ export default function NotFoundPage() {
     <div className="flex min-h-dvh flex-col">
       <MarketingHeader />
 
-      <main className="flex-1 px-5 py-14 sm:px-8 lg:px-14 lg:py-20">
+      <main id="main" tabIndex={-1} className="flex-1 px-5 py-14 sm:px-8 lg:px-14 lg:py-20">
         <div className="grid items-center gap-14 lg:grid-cols-[1.1fr_1fr]">
           <div>
             <p className="font-semibold text-cobalt">Error 404</p>

@@ -18,7 +18,7 @@ export function LegalLayout({
     <div className="flex min-h-dvh flex-col">
       <MarketingHeader />
 
-      <div className="flex-1 px-4 py-8 sm:px-6 lg:grid lg:grid-cols-[240px_1fr] lg:gap-12 lg:px-10 lg:py-12 2xl:px-12">
+      <div id="main" tabIndex={-1} className="flex-1 px-4 py-8 sm:px-6 lg:grid lg:grid-cols-[240px_1fr] lg:gap-12 lg:px-10 lg:py-12 2xl:px-12">
         <aside className="hidden lg:block">
           <nav aria-label="On this page" className="sticky top-24">
             <p className="mb-2 text-[13px] font-semibold text-muted">On this page</p>

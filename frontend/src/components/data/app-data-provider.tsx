@@ -49,6 +49,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const addGoal = useCallback<AppDataApi["addGoal"]>((g) => {
+    const id = `g-${Date.now().toString(36)}`;
+    setData((d) => ({ ...d, goals: [...d.goals, { id, ...g }] }));
+    return id;
+  }, []);
+
+  const removeGoal = useCallback((id: string) => {
+    setData((d) => ({ ...d, goals: d.goals.filter((g) => g.id !== id) }));
+  }, []);
+
   const markAnswered = useCallback<AppDataApi["markAnswered"]>((insightId, answered) => {
     setData((d) => ({
       ...d,
@@ -59,8 +69,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const reset = useCallback(() => setData(INITIAL_DATA), []);
 
   const api = useMemo<AppDataApi>(
-    () => ({ data, addMemory, removeMemory, restoreMemory, setRecurringStatus, upsertBudget, markAnswered, reset }),
-    [data, addMemory, removeMemory, restoreMemory, setRecurringStatus, upsertBudget, markAnswered, reset],
+    () => ({ data, addMemory, removeMemory, restoreMemory, setRecurringStatus, upsertBudget, addGoal, removeGoal, markAnswered, reset }),
+    [data, addMemory, removeMemory, restoreMemory, setRecurringStatus, upsertBudget, addGoal, removeGoal, markAnswered, reset],
   );
 
   return <AppDataContext.Provider value={api}>{children}</AppDataContext.Provider>;

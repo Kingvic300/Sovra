@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Menu, X } from "lucide-react";
 import { Wordmark } from "@/components/shell/logo";
+import { SkipLink } from "@/components/shell/skip-link";
+import { buttonClass } from "@/components/ui/button-class";
 import { useAuth } from "@/lib/auth-context";
 import { CONTACT_EMAIL } from "@/lib/legal";
 
@@ -25,14 +27,14 @@ function AccountActions({ onNavigate }: { onNavigate?: () => void }) {
             await signOut();
             navigate("/");
           }}
-          className="h-10 rounded-full px-4 text-[15px] font-semibold text-muted transition-colors hover:text-ink"
+          className={buttonClass("quiet")}
         >
           Log out
         </button>
         <Link
           to="/app"
           onClick={onNavigate}
-          className="flex h-10 items-center rounded-full bg-ink px-5 text-[15px] font-semibold text-white transition-colors hover:bg-cobalt"
+          className={buttonClass("primary")}
         >
           Open Sovra
         </Link>
@@ -44,14 +46,14 @@ function AccountActions({ onNavigate }: { onNavigate?: () => void }) {
       <Link
         to="/signin"
         onClick={onNavigate}
-        className="flex h-10 items-center rounded-full px-4 text-[15px] font-semibold text-ink transition-colors hover:bg-porcelain"
+        className={buttonClass("quiet")}
       >
         Sign in
       </Link>
       <Link
         to="/signup"
         onClick={onNavigate}
-        className="flex h-10 items-center rounded-full bg-ink px-5 text-[15px] font-semibold text-white transition-colors hover:bg-cobalt"
+        className={buttonClass("primary")}
       >
         Get started
       </Link>
@@ -65,6 +67,7 @@ export function MarketingHeader() {
 
   return (
     <>
+      <SkipLink />
       <div className="bg-ink px-5 py-2 text-center text-[13px] text-white/75 sm:px-8">
         Early access. Memories are saved on Walrus mainnet and balances are read live through Tatum.{" "}
         <Link to="/how-it-works" className="font-semibold text-white underline-offset-2 hover:underline">
@@ -108,7 +111,7 @@ export function MarketingHeader() {
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((o) => !o)}
-              className="grid size-10 place-items-center rounded-full text-ink hover:bg-porcelain md:hidden"
+              className="grid size-11 place-items-center rounded-full text-ink hover:bg-porcelain md:hidden"
             >
               {menuOpen ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
             </button>
@@ -208,7 +211,7 @@ export function MarketingLayout() {
   return (
     <div className="flex min-h-dvh flex-col">
       <MarketingHeader />
-      <main className="flex-1">
+      <main id="main" tabIndex={-1} className="flex-1">
         <Outlet />
       </main>
       <MarketingFooter />

@@ -51,13 +51,13 @@ function LedgerLine({ n, label, memory, current }: { n: number; label: string; m
       }`}
     >
       {current && <span className="absolute inset-y-2 left-0 w-[3px] rounded-full bg-signal" aria-hidden />}
-      <span className="pt-0.5 text-[13px] text-white/35 tabular-nums">{String(n).padStart(2, "0")}</span>
+      <span className="pt-0.5 text-[13px] text-white/55 tabular-nums">{String(n).padStart(2, "0")}</span>
       {memory ? (
         <p className="text-[16px] leading-relaxed text-white">
           <Remembered text={memory.text} highlight={memory.highlight} />
         </p>
       ) : (
-        <p className="text-[16px] text-white/35">{current ? `${label}, as you type` : label}</p>
+        <p className="text-[16px] text-white/55">{current ? `${label}, as you type` : label}</p>
       )}
     </li>
   );

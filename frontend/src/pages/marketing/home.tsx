@@ -131,7 +131,7 @@ export default function HomePage() {
               Sovra reads your accounts, learns your goals, limits and habits, and keeps them in a vault you own. Ask
               anything and get an answer that fits your life, not an average.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link to="/signup" className={`${buttonClass()} h-12 px-6 text-[15px]`}>
                 Get started with Google
               </Link>

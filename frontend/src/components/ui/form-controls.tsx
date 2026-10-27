@@ -61,8 +61,8 @@ export function Chip({
       aria-pressed={active}
       onClick={onClick}
       disabled={disabled}
-      className={`h-9 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
-        active ? "border-cobalt bg-cobalt text-white" : "border-line bg-card text-ink hover:border-cobalt/50"
+      className={`h-9 rounded-full border px-4 text-[14px] font-medium transition-colors pointer-coarse:h-11 disabled:cursor-not-allowed disabled:opacity-45 ${
+        active ? "border-cobalt bg-cobalt text-white" : "border-field/70 bg-card text-ink hover:border-cobalt"
       }`}
     >
       {children}

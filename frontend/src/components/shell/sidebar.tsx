@@ -28,7 +28,7 @@ export function Sidebar({ stats }: { stats: ShellStats }) {
       <nav aria-label="Main" className="mt-7 flex flex-col gap-5">
         {navGroups(stats).map((group) => (
           <div key={group.label}>
-            <p className="mb-1 px-2.5 text-[12px] font-medium text-muted/80">{group.label}</p>
+            <p className="mb-1 px-2.5 text-[12px] font-medium text-muted">{group.label}</p>
             <ul className="flex flex-col gap-0.5">
               {group.items.map(({ href, label, icon: Icon, badge }) => {
                 const active = isActive(pathname, href);
@@ -37,7 +37,7 @@ export function Sidebar({ stats }: { stats: ShellStats }) {
                     <Link
                       to={href}
                       aria-current={active ? "page" : undefined}
-                      className={`flex items-center gap-3 rounded-lg px-2.5 py-2 font-medium transition-colors ${
+                      className={`flex items-center gap-3 rounded-lg px-2.5 py-2 font-medium transition-colors pointer-coarse:py-3 ${
                         active ? "bg-card text-ink shadow-card" : "text-muted hover:bg-card/50 hover:text-ink"
                       }`}
                     >

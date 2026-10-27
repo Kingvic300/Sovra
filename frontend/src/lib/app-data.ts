@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import {
   ACCOUNTS,
   BUDGETS,
+  GOALS,
   MEMORIES,
   MEMORY_COUNT,
   MONTH_NET,
@@ -11,6 +12,7 @@ import {
   TRANSACTIONS,
   type Budget,
   type CategoryId,
+  type Goal,
   type Memory,
   type MemoryKind,
   type Recurring,
@@ -20,6 +22,7 @@ import { daysBetween, longDate } from "@/lib/format";
 /** Everything the user can change from the UI. Persisted in the browser until the backend is wired. */
 export type AppData = {
   budgets: Budget[];
+  goals: Goal[];
   recurring: Recurring[];
   memories: Memory[];
   /** Insights the user already answered, so they aren't asked again. */
@@ -28,6 +31,7 @@ export type AppData = {
 
 export const INITIAL_DATA: AppData = {
   budgets: BUDGETS,
+  goals: GOALS,
   recurring: RECURRING,
   memories: MEMORIES,
   answered: [],
@@ -42,6 +46,8 @@ export type AppDataApi = {
   restoreMemory: (m: Memory, index: number) => void;
   setRecurringStatus: (id: string, status: Recurring["status"]) => void;
   upsertBudget: (b: Budget) => void;
+  addGoal: (g: Omit<Goal, "id">) => string;
+  removeGoal: (id: string) => void;
   markAnswered: (insightId: string, answered: boolean) => void;
   reset: () => void;
 };
@@ -62,17 +68,19 @@ export function committedFor(category: CategoryId, recurring: Recurring[]) {
     (r) => r.status === "active" && r.category === category && r.next >= TODAY && r.next <= MONTH_END,
   );
   const amount = due.reduce((s, r) => s + r.amount, 0);
-  if (!due.length) return { amount: 0, label: null as string | null, items: due };
+  if (!due.length) return { amount: 0, label: null as string | null, names: "", when: "", items: due };
   const names = due.map((r) => r.merchant);
   const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
   const sameDay = due.every((r) => r.next === due[0].next);
   const when = sameDay ? `on ${longDate(due[0].next).split(",")[0]}` : "before the month ends";
-  return { amount, label: `${list} ${when}`, items: due };
+  return { amount, label: `${list} ${when}`, names: list, when, items: due };
 }
 
 export type BudgetView = Budget & {
   committed: number;
   committedLabel: string | null;
+  /** "Netflix and Spotify renew on Friday" */
+  renewalSentence: string | null;
   projected: number;
   left: number;
   over: boolean;
@@ -82,7 +90,15 @@ export function budgetViews(data: AppData): BudgetView[] {
   return data.budgets.map((b) => {
     const c = committedFor(b.category, data.recurring);
     const projected = b.spent + c.amount;
-    return { ...b, committed: c.amount, committedLabel: c.label, projected, left: b.limit - projected, over: projected > b.limit };
+    return {
+      ...b,
+      committed: c.amount,
+      committedLabel: c.label,
+      renewalSentence: c.label ? `${c.names} ${c.items.length > 1 ? "renew" : "renews"} ${c.when}` : null,
+      projected,
+      left: b.limit - projected,
+      over: projected > b.limit,
+    };
   });
 }
 
