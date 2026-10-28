@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Module, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Module, Post, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { AiModule } from "../ai/ai.module.js";
 import { CurrentSession, type Session } from "../auth/session.js";
@@ -14,6 +14,11 @@ import { WalletModule } from "../wallet/wallet.module.js";
 import { AskService } from "./ask.service.js";
 
 const AskBody = z.object({ question: z.string().trim().min(2).max(1000) });
+const HistoryQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  /** Id of the oldest message already shown. */
+  before: z.string().uuid().optional(),
+});
 
 @Controller("ask")
 @UseGuards(SessionGuard)
@@ -25,6 +30,16 @@ export class AskController {
   @RateLimit("ask")
   ask(@CurrentSession() s: Session, @Body(new ZodPipe(AskBody)) body: z.infer<typeof AskBody>) {
     return this.asker.ask(s, body.question);
+  }
+
+  @Get("history")
+  history(@CurrentSession() s: Session, @Query(new ZodPipe(HistoryQuery)) q: z.infer<typeof HistoryQuery>) {
+    return this.asker.history(s.address, q);
+  }
+
+  @Delete("history")
+  clearHistory(@CurrentSession() s: Session) {
+    return this.asker.clearHistory(s.address);
   }
 }
 

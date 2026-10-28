@@ -31,6 +31,8 @@ const GENEROUS_RATE_LIMITS = {
 export class FakeAi implements AiProvider {
   readonly answers: AnswerInput[] = [];
   readonly categorized: MerchantToCategorize[][] = [];
+  /** When set, `answer` throws it, like a Groq outage or rate limit. */
+  failure: Error | undefined;
 
   constructor(
     readonly configured = true,
@@ -46,6 +48,7 @@ export class FakeAi implements AiProvider {
 
   async answer(input: AnswerInput) {
     this.answers.push(input);
+    if (this.failure) throw this.failure;
     return { text: `Answer to: ${input.question}`, model: "fake-model" };
   }
 }
