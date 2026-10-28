@@ -22,8 +22,24 @@ Only `SESSION_SECRET` is required. Any integration without keys answers `503 {"e
 | `npm run build` | Compile to `dist/` |
 | `npm run start:prod` | Run `dist/main.js` (reads `.env` if present) |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Unit and integration tests (see below) |
 | `npm run db:generate` | Create a migration from `src/database/schema.ts` |
 | `npm run db:migrate` | Apply migrations in `drizzle/` to `DATABASE_URL` |
+
+## Tests
+
+```bash
+npm test                      # compile to dist-test/ and run every *.spec.ts with node:test
+TEST_LOGS=1 npm test          # also print server-side errors and warnings
+```
+
+Tests need no database, keys or network:
+
+- **Unit tests** sit next to the code (`src/**/*.spec.ts`): recurring detection, CSV parsing, categories, memory sentences, Tatum transfer parsing, the Groq provider (with `fetch` mocked), env validation and error handling.
+- **Integration tests** (`src/e2e/*.e2e.spec.ts`) boot the real `AppModule` on a random port with the same HTTP setup as `main.ts` (`src/app.setup.ts`). The database is in-process Postgres ([PGlite](https://pglite.dev)) with the migrations in `drizzle/` applied, so a schema change without a migration fails the tests.
+- Groq, Walrus Memory and Tatum are never called. `src/testing/` has fakes (`FakeAi`, `FakeMemWal`) and helpers: `createTestApp`, `createTestDatabase`, and `signIn`, which runs the real nonce + signature flow with an Ed25519 key (verified offline, same code path as zkLogin).
+
+CI (`.github/workflows/ci.yml`) runs typecheck, build and tests for the backend, and lint and build for the frontend, on every pull request and push to `main`.
 
 ## Environment
 
@@ -96,7 +112,8 @@ To change vendors, implement `AiProvider` (`src/ai/ai.provider.ts`) and bind it 
 
 ```
 src/
-  main.ts                 bootstrap: /api prefix, cookies, CORS, error filter
+  main.ts                 bootstrap
+  app.setup.ts            /api prefix, cookies, CORS, error filter (shared with tests)
   app.module.ts
   health.controller.ts
   config/                 zod-validated env (ENV token)
@@ -111,5 +128,7 @@ src/
   transactions/           CSV import (CsvService), list, recategorize with learned rules
   ask/                    grounded Q&A over the user's data and memories
   budgets/ goals/ recurring/
+  e2e/                    integration tests against the real app
+  testing/                test helpers and fakes (not part of the build)
 drizzle/                  SQL migrations
 ```
