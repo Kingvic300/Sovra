@@ -38,6 +38,13 @@
     font-size: 15px;
     line-height: 1.5;
   }
+  /* A modal <dialog> doesn't stop the page behind it from scrolling, so lock it while one is open. */
+  html:has(dialog[open]) {
+    overflow: hidden;
+  }
+  dialog {
+    overscroll-behavior: contain;
+  }
   :focus-visible {
     outline: 2px solid var(--color-cobalt);
     outline-offset: 2px;
