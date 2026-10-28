@@ -2,6 +2,7 @@ import { Body, Controller, HttpCode, Post, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { z } from "zod";
 import { ZodPipe } from "../common/zod.pipe.js";
+import { RateLimit } from "../security/rate-limit.js";
 import { AuthService } from "./auth.service.js";
 import { SESSION_COOKIE, type Session } from "./session.js";
 
@@ -23,12 +24,14 @@ export class AuthController {
 
   @Post("nonce")
   @HttpCode(200)
+  @RateLimit("auth")
   nonce(@Body(new ZodPipe(NonceBody)) body: z.infer<typeof NonceBody>) {
     return this.auth.createChallenge(body.address);
   }
 
   @Post("verify")
   @HttpCode(200)
+  @RateLimit("auth")
   async verify(@Body(new ZodPipe(VerifyBody)) body: z.infer<typeof VerifyBody>, @Res({ passthrough: true }) res: Response) {
     const session = await this.auth.verify(body);
     return this.startSession(session, res);
@@ -36,6 +39,7 @@ export class AuthController {
 
   @Post("demo")
   @HttpCode(200)
+  @RateLimit("demo")
   async demo(@Res({ passthrough: true }) res: Response) {
     return this.startSession(await this.auth.demo(), res);
   }

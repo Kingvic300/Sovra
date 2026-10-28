@@ -10,6 +10,7 @@ import { HealthController } from "./health.controller.js";
 import { MeModule } from "./me/me.module.js";
 import { MemoryModule } from "./memory/memory.module.js";
 import { RecurringModule } from "./recurring/recurring.module.js";
+import { SecurityModule } from "./security/security.module.js";
 import { TransactionsModule } from "./transactions/transactions.module.js";
 import { WalletModule } from "./wallet/wallet.module.js";
 
@@ -18,6 +19,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     ConfigModule,
     DatabaseModule,
     AuthModule,
+    SecurityModule,
     AiModule,
     WalletModule,
     MemoryModule,
