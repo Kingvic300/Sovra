@@ -1,15 +1,39 @@
-import { useMemo, useState } from "react";
-import { Search, Upload } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import { Search, Upload, X } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { buttonClass } from "@/components/ui/button-class";
 import { useAppData } from "@/lib/app-data";
 import { ACCOUNTS, CATEGORIES, type CategoryId, type Transaction } from "@/lib/demo-data";
-import { shortDate, signedMoney } from "@/lib/format";
+import { money, shortDate, signedMoney } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
-import { Chip } from "@/components/ui/form-controls";
 
 type Pending = { txId: string; merchant: string; category: CategoryId };
+
+/** Category filter with a live count, compact enough to scroll as a strip on phones. */
+function FilterPill({ active, count, onClick, children }: { active: boolean; count: number; onClick: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`inline-flex h-9 items-center gap-1.5 rounded-full border pr-2 pl-3.5 text-[14px] font-medium whitespace-nowrap transition-colors pointer-coarse:h-10 ${
+        active
+          ? "border-cobalt bg-cobalt text-white"
+          : `border-field/70 bg-card hover:border-cobalt ${count === 0 ? "text-muted" : "text-ink"}`
+      }`}
+    >
+      {children}
+      <span
+        className={`min-w-5 rounded-full px-1.5 text-center text-[12px] leading-5 font-semibold tabular-nums ${
+          active ? "bg-white/20 text-white" : "bg-porcelain text-muted"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
 
 export function TransactionsTable({ initial }: { initial: Transaction[] }) {
   const [rows, setRows] = useState(initial);
@@ -18,18 +42,22 @@ export function TransactionsTable({ initial }: { initial: Transaction[] }) {
   const [pending, setPending] = useState<Pending | null>(null);
   const toast = useToast();
   const { addMemory } = useAppData();
+  const searchId = useId();
 
   const accountName = (id: string) => ACCOUNTS.find((a) => a.id === id)?.name ?? "";
 
-  const visible = useMemo(
-    () =>
-      rows.filter(
-        (t) =>
-          (filter === "all" || t.category === filter) &&
-          t.merchant.toLowerCase().includes(query.trim().toLowerCase()),
-      ),
-    [rows, filter, query],
-  );
+  const q = query.trim().toLowerCase();
+  const matching = useMemo(() => rows.filter((t) => t.merchant.toLowerCase().includes(q)), [rows, q]);
+  const visible = useMemo(() => matching.filter((t) => filter === "all" || t.category === filter), [matching, filter]);
+  const countFor = (c: CategoryId | "all") => (c === "all" ? matching.length : matching.filter((t) => t.category === c).length);
+  const spent = visible.reduce((sum, t) => sum + Math.max(0, -t.amount), 0);
+  const received = visible.reduce((sum, t) => sum + Math.max(0, t.amount), 0);
+  const filtered = filter !== "all" || q !== "";
+
+  function clearFilters() {
+    setQuery("");
+    setFilter("all");
+  }
 
   const usedCategories = useMemo(
     () => (Object.keys(CATEGORIES) as CategoryId[]).filter((c) => rows.some((t) => t.category === c)),
@@ -64,32 +92,70 @@ export function TransactionsTable({ initial }: { initial: Transaction[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="relative w-full sm:w-72">
-          <span className="sr-only">Search transactions</span>
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search merchants"
-            className="h-10 w-full rounded-lg border border-field bg-card pr-3 pl-9 placeholder:text-muted focus:border-cobalt focus:outline-none focus-visible:ring-4 focus-visible:ring-cobalt/20 pointer-coarse:h-11"
-          />
-        </label>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1 sm:max-w-80">
+            <label htmlFor={searchId} className="sr-only">
+              Search transactions
+            </label>
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+            <input
+              id={searchId}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+              placeholder="Search merchants"
+              enterKeyHint="search"
+              className="h-10 w-full rounded-lg border border-field bg-card pr-10 pl-9 placeholder:text-muted focus:border-cobalt focus:outline-none focus-visible:ring-4 focus-visible:ring-cobalt/20 pointer-coarse:h-11"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="absolute top-1/2 right-1 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted hover:bg-porcelain hover:text-ink pointer-coarse:size-9"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            )}
+          </div>
+          <Link to="/app/accounts" className={`${buttonClass("secondary")} ml-auto shrink-0 px-3 pointer-coarse:min-w-11 sm:px-4`}>
+            <Upload className="size-4" aria-hidden />
+            <span className="sr-only sm:not-sr-only">Import CSV</span>
+          </Link>
+        </div>
+
+        {/* Phones: one scrolling strip, faded at the edge so it reads as more to swipe. */}
         <div
-          className="-mx-4 flex w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:w-auto sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&>*]:shrink-0"
+          className="-mx-4 flex gap-2 overflow-x-auto px-4 py-0.5 [mask-image:linear-gradient(to_right,transparent,black_1rem,black_calc(100%-2.5rem),transparent)] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:[mask-image:none] [&>*]:shrink-0"
           role="group"
           aria-label="Filter by category"
         >
           {(["all", ...usedCategories] as const).map((c) => (
-            <Chip key={c} active={filter === c} onClick={() => setFilter(c)}>
+            <FilterPill key={c} active={filter === c} count={countFor(c)} onClick={() => setFilter(c)}>
               {c === "all" ? "All" : CATEGORIES[c]}
-            </Chip>
+            </FilterPill>
           ))}
         </div>
-        <Link to="/app/accounts" className={`${buttonClass("secondary", "sm")} ml-auto`}>
-          <Upload className="size-4" aria-hidden />
-          Import CSV
-        </Link>
+
+        <div className="flex min-h-6 items-center justify-between gap-3 text-[13px] text-muted">
+          <p aria-live="polite">
+            <span className="font-semibold text-ink">{visible.length}</span> {visible.length === 1 ? "transaction" : "transactions"}
+            <span aria-hidden> · </span>
+            <span className="tabular-nums">{money(spent)} out</span>
+            {received > 0 && (
+              <>
+                <span aria-hidden> · </span>
+                <span className="text-gain tabular-nums">{money(received)} in</span>
+              </>
+            )}
+          </p>
+          {filtered && (
+            <button type="button" onClick={clearFilters} className="-my-2 py-2 font-semibold text-cobalt hover:underline">
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
       {pending && (
@@ -190,7 +256,12 @@ export function TransactionsTable({ initial }: { initial: Transaction[] }) {
           </tbody>
         </table>
         {visible.length === 0 && (
-          <p className="px-5 py-10 text-center text-muted">No transactions match. Clear the search or pick another category.</p>
+          <div className="px-5 py-10 text-center">
+            <p className="text-muted">No transactions match.</p>
+            <button type="button" onClick={clearFilters} className="mt-2 font-semibold text-cobalt hover:underline">
+              Clear filters
+            </button>
+          </div>
         )}
       </div>
     </div>
