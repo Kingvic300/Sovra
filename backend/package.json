@@ -11,6 +11,8 @@
     "build": "nest build",
     "start:prod": "node --env-file-if-exists=.env dist/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:build": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
+    "test": "npm run test:build && node --enable-source-maps --test \"dist-test/**/*.spec.js\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -30,7 +32,9 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.9",
     "@nestjs/cli": "^12.0.11",
+    "@nestjs/testing": "12.3.2",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",
