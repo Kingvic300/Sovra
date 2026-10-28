@@ -3,7 +3,6 @@ import { after, before, describe, it } from "node:test";
 import { JwtService } from "@nestjs/jwt";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { eq } from "drizzle-orm";
-import { DEMO_ADDRESS } from "../auth/session.js";
 import { authNonces, users } from "../database/schema.js";
 import { createTestApp, signIn, type TestApp } from "../testing/test-app.js";
 import { createTestDatabase, type TestDatabase } from "../testing/test-database.js";
@@ -70,7 +69,7 @@ describe("auth and sessions (with database)", () => {
     const nameOf = async () => (await database.db.select().from(users).where(eq(users.address, address)))[0];
 
     await signIn(api.client(), keypair);
-    assert.deepEqual({ ...(await nameOf()), createdAt: undefined }, { address, method: "google", name: null, email: null, createdAt: undefined });
+    assert.deepEqual({ ...(await nameOf()), createdAt: undefined }, { address, method: "google", name: null, email: null, createdAt: undefined, expiresAt: null }, "real accounts never expire");
 
     await signIn(api.client(), keypair, { name: "Ada Okafor", email: "ada@example.com" });
     assert.equal((await nameOf()).name, "Ada Okafor");
@@ -144,12 +143,13 @@ describe("auth and sessions (with database)", () => {
     assert.equal(missing.body.error.code, "invalid_request");
   });
 
-  it("starts a demo session for the demo address", async () => {
+  it("starts a demo session on its own short-lived account", async () => {
     const client = api.client();
     const res = await client.post("/auth/demo");
     assert.equal(res.status, 200);
-    assert.equal(res.body.user.address, DEMO_ADDRESS);
+    assert.match(res.body.user.address, /^0x[0-9a-f]{64}$/);
     assert.equal(res.body.user.method, "demo");
+    assert.match(res.headers.get("set-cookie") ?? "", /Max-Age=86400/, "the demo cookie lasts as long as the demo account");
     assert.equal((await client.get("/me")).status, 200);
   });
 
@@ -176,7 +176,7 @@ describe("auth and sessions (with database)", () => {
     assert.equal((await tampered.get("/me")).status, 401);
 
     const forged = api.client();
-    const token = await new JwtService({ secret: "some-other-secret-value" }).signAsync({ sub: DEMO_ADDRESS, method: "demo" });
+    const token = await new JwtService({ secret: "some-other-secret-value" }).signAsync({ sub: `0x${"7".repeat(64)}`, method: "google" });
     forged.cookie = `sovra_session=${token}`;
     assert.equal((await forged.get("/me")).status, 401);
   });

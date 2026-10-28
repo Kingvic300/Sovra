@@ -51,6 +51,7 @@ describe("rate limit settings", () => {
     assert.deepEqual(rules.demo, { limit: 10, windowMs: 3_600_000, by: "ip" });
     assert.deepEqual(rules.ask, { limit: 30, windowMs: 3_600_000, by: "user" });
     assert.deepEqual(rules.import, { limit: 30, windowMs: 3_600_000, by: "user" });
+    assert.deepEqual(rules.demoAsk, { limit: 10, windowMs: 3_600_000, by: "ip" });
   });
 
   it("reads limits from the environment", () => {

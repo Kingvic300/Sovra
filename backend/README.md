@@ -21,6 +21,7 @@ Only `SESSION_SECRET` is required. Any integration without keys answers `503 {"e
 | `npm run start:dev` | Compile with tsc and restart on change |
 | `npm run build` | Compile to `dist/` |
 | `npm run start:prod` | Run `dist/main.js` (reads `.env` if present) |
+| `npm run demo:cleanup` | Delete expired demo accounts once (after `build`). For a cron job |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Unit and integration tests (see below) |
 | `npm run db:generate` | Create a migration from `src/database/schema.ts` |
@@ -55,6 +56,8 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build and tests for the backend,
 | `RATE_LIMIT_DEMO_PER_HOUR` | no | `/auth/demo` per hour per IP. Defaults to `10`. |
 | `RATE_LIMIT_ASK_PER_HOUR` | no | `/ask` per hour per user. Defaults to `30`. |
 | `RATE_LIMIT_IMPORT_PER_HOUR` | no | `/transactions/import` (previews included) per hour per user. Defaults to `30`. |
+| `RATE_LIMIT_DEMO_ASK_PER_HOUR` | no | `/ask` per hour per IP from demo accounts, on top of the per-user limit. Defaults to `10`. |
+| `DEMO_TTL_HOURS` | no | How long a demo account lives. Defaults to `24`. |
 | `DATABASE_URL` | for data routes | Postgres connection string. |
 | `TATUM_API_KEY` | for wallet reads | Sent as `x-api-key` to Tatum's Sui gateway. |
 | `MEMWAL_KEY` | for memories | Walrus Memory delegate **private** key. Server only. |
@@ -73,7 +76,7 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | GET | `/health` | Liveness and which integrations are configured |
 | POST | `/auth/nonce` | `{address}` → `{message, expiresAt}`: the text to sign |
 | POST | `/auth/verify` | `{address, message, signature, name?, email?}` → checks the zkLogin signature, sets the cookie |
-| POST | `/auth/demo` | Starts a session for the demo account |
+| POST | `/auth/demo` | Creates a fresh demo account with sample data and starts its session (see [Demo accounts](#demo-accounts)) |
 | POST | `/auth/logout` | Clears the cookie |
 | GET | `/me` | Session user and saved profile (`profile: null` without a database) |
 | PUT | `/me/profile` | Saves onboarding answers; new goal, limit and payday also become goal/budget rows and memories |
@@ -119,6 +122,15 @@ Known limitation: counters live in process memory. Each instance counts separate
 **Errors.** Malformed JSON (400), bodies over 100 kB (413), CSVs over 5 MB (413), unknown routes (404) and unexpected failures (500, details only in the server log) all use the `{ "error": { "code", "message" } }` shape.
 
 **Authorization.** Every route except `health` and `auth/*` requires the session cookie, and every query filters by the session's address. Integration tests check that one user can't read or change another's transactions, budgets, goals or memories.
+
+## Demo accounts
+
+Each `POST /auth/demo` creates a new account for that visitor: a random Sui address nobody can sign in to, `method: "demo"`, and `users.expires_at` set `DEMO_TTL_HOURS` ahead. It's seeded (`src/auth/demo-seed.ts`) with the same story as the frontend demo: Ada's profile, two CSV accounts, about three months of transactions with dates relative to today (so Netflix and Spotify always renew in three days), two learned category rules, six budgets, two goals and seven memories.
+
+- **Isolation.** Demo visitors never share an account, so they can't see or change each other's data. Every route already filters by the session's address.
+- **Expiry.** The session cookie and JWT last exactly as long as the account. `SessionGuard` also checks demo sessions against the database on each request, so a demo that has expired or been deleted, or the old shared demo account, gets `401`.
+- **Cleanup.** Expired demo accounts are deleted, along with every row they own (`ON DELETE CASCADE`), whenever a new demo starts, and by `npm run demo:cleanup` for a cron job. Cleanup only deletes demo rows that have an expiry. The legacy shared demo row (`0x7b3e…2f9a`, no expiry) is left for a person to delete.
+- **No paid calls.** Demo memories are stored only in the local index (`status: "local"`) and recalled with a local word match, so Walrus is never called for a demo. Demo imports use keyword categories, not the AI model. Ask still works for demos, but a per-IP limit (`RATE_LIMIT_DEMO_ASK_PER_HOUR`) applies on top of the per-user one, because every demo is a new user.
 
 ## How the integrations work
 

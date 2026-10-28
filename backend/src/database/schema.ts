@@ -1,12 +1,18 @@
 import { boolean, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-export const users = pgTable("users", {
-  address: text("address").primaryKey(),
-  method: text("method", { enum: ["google", "demo"] }).notNull(),
-  name: text("name"),
-  email: text("email"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const users = pgTable(
+  "users",
+  {
+    address: text("address").primaryKey(),
+    method: text("method", { enum: ["google", "demo"] }).notNull(),
+    name: text("name"),
+    email: text("email"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Demo accounts only: when the account and everything in it is deleted. Null for real users. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+  },
+  (t) => [index("users_expires_at_idx").on(t.expiresAt)],
+);
 
 export type GoalJson = { name: string; target: number; due: string };
 export type LimitJson = { category: string; amount: number };
@@ -121,7 +127,8 @@ export const memories = pgTable(
     source: text("source").notNull(),
     jobId: text("job_id"),
     blobId: text("blob_id"),
-    status: text("status", { enum: ["pending", "stored", "failed"] }).notNull().default("pending"),
+    /** "local": demo memories, kept only in this index and never sent to Walrus. */
+    status: text("status", { enum: ["pending", "stored", "failed", "local"] }).notNull().default("pending"),
     uses: integer("uses").notNull().default(0),
     forgottenAt: timestamp("forgotten_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

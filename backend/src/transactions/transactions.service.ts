@@ -74,7 +74,8 @@ export class TransactionsService {
     }
 
     const db = this.database.db;
-    const categorizedBy = await this.refineCategories(parsed.rows);
+    // Demo accounts get keyword categories only, so a public demo can't run up AI costs.
+    const categorizedBy = await this.refineCategories(parsed.rows, session.method !== "demo");
     await db.insert(users).values({ address: session.address, method: session.method, name: session.name }).onConflictDoNothing();
     const [account] = await db
       .insert(accounts)
@@ -116,7 +117,7 @@ export class TransactionsService {
    * Learned rules win. Other merchants go to the AI model once each (by merchant key) when Groq
    * is configured; anything it skips or fails on keeps its keyword guess or "uncategorized".
    */
-  private async refineCategories(rows: ParsedRow[]) {
+  private async refineCategories(rows: ParsedRow[], useAi: boolean) {
     const counts = { rules: 0, ai: 0, keywords: 0 };
     const pending = new Map<string, { merchantKey: string; example: string; amount: number }>();
     for (const r of rows) {
@@ -124,7 +125,8 @@ export class TransactionsService {
       if (!pending.has(r.merchantKey)) pending.set(r.merchantKey, { merchantKey: r.merchantKey, example: r.merchant, amount: r.amount });
     }
 
-    const fromAi = this.ai.configured && pending.size ? await this.ai.categorize([...pending.values()]) : new Map<string, CategoryId>();
+    const fromAi =
+      useAi && this.ai.configured && pending.size ? await this.ai.categorize([...pending.values()]) : new Map<string, CategoryId>();
     for (const r of rows) {
       if (r.learned) counts.rules++;
       else if (fromAi.has(r.merchantKey)) {
@@ -159,7 +161,7 @@ export class TransactionsService {
     let memoryId: string | null = null;
     let memory: { status: "saved" | "skipped" | "failed"; text: string; reason?: string };
     const text = categoryRuleSentence(tx.merchant, input.category);
-    if (!this.memory.configured) {
+    if (!(await this.memory.availableFor(address))) {
       memory = { status: "skipped", text, reason: "not_configured" };
     } else {
       try {

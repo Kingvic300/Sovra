@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { notConfigured, notFound, upstreamFailed } from "../common/errors.js";
 import { ENV, type Env } from "../config/env.js";
 import { DatabaseService } from "../database/database.service.js";
-import { memories } from "../database/schema.js";
+import { memories, users } from "../database/schema.js";
 
 export type MemoryKind = "goal" | "limit" | "correction" | "preference" | "decision";
 export const MEMORY_KINDS: MemoryKind[] = ["goal", "limit", "correction", "preference", "decision"];
@@ -46,9 +46,17 @@ export class MemwalService implements OnModuleDestroy {
 
   /**
    * Indexes the memory, sends it to the relayer, and finishes the Walrus upload in the background.
-   * Returns as soon as the relayer accepts the job.
+   * Returns as soon as the relayer accepts the job. Demo accounts never reach Walrus: their
+   * memories live only in the local index (status "local") and are deleted with the demo.
    */
   async remember(address: string, input: { kind: MemoryKind; text: string; source: string }) {
+    if (await this.isDemo(address)) {
+      const [local] = await this.database.db
+        .insert(memories)
+        .values({ userAddress: address, kind: input.kind, text: input.text, source: input.source, status: "local" })
+        .returning();
+      return local;
+    }
     const memwal = this.memwal;
     const db = this.database.db;
     const [row] = await db
@@ -88,6 +96,7 @@ export class MemwalService implements OnModuleDestroy {
    * and matching index rows get their `uses` counter bumped.
    */
   async recall(address: string, query: string, limit = 5) {
+    if (await this.isDemo(address)) return this.recallLocally(address, query, limit);
     const memwal = this.memwal;
     const result = await memwal
       .recall({ query, limit: limit * 2, namespace: namespaceFor(address) })
@@ -128,6 +137,36 @@ export class MemwalService implements OnModuleDestroy {
         .where(inArray(memories.id, usedIds));
     }
     return hits;
+  }
+
+  /** Whether memories for this address can be stored and recalled, with or without Walrus keys. */
+  async availableFor(address: string) {
+    return this.configured || (await this.isDemo(address));
+  }
+
+  /** Demo recall: rank the local index by how many words of the question each memory shares. No Walrus call. */
+  private async recallLocally(address: string, query: string, limit: number) {
+    const words = [...new Set(query.toLowerCase().match(/[a-z0-9$]{3,}/g) ?? [])];
+    const rows = await this.list(address);
+    const hits = rows
+      .map((m) => ({ m, score: words.filter((w) => m.text.toLowerCase().includes(w)).length }))
+      .filter((h) => h.score > 0)
+      .sort((a, b) => b.score - a.score || b.m.uses - a.m.uses)
+      .slice(0, limit)
+      .map(({ m }) => ({ id: m.id, blobId: null, kind: m.kind, text: m.text, distance: null, createdAt: m.createdAt }));
+    if (hits.length) {
+      await this.database.db
+        .update(memories)
+        .set({ uses: sql`${memories.uses} + 1` })
+        .where(inArray(memories.id, hits.map((h) => h.id)));
+    }
+    return hits;
+  }
+
+  private async isDemo(address: string) {
+    if (!this.database.available) return false;
+    const [user] = await this.database.db.select({ method: users.method }).from(users).where(eq(users.address, address));
+    return user?.method === "demo";
   }
 
   /**

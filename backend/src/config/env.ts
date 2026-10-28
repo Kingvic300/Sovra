@@ -42,6 +42,10 @@ const EnvSchema = z.object({
   RATE_LIMIT_ASK_PER_HOUR: positiveInt(30),
   /** Statement uploads (previews included) per hour per user. Imports may call the AI model. */
   RATE_LIMIT_IMPORT_PER_HOUR: positiveInt(30),
+  /** Ask Sovra questions per hour per IP from demo accounts, on top of the per-user limit (each demo is a new user). */
+  RATE_LIMIT_DEMO_ASK_PER_HOUR: positiveInt(10),
+  /** How long a demo account lives before it and its data are deleted. */
+  DEMO_TTL_HOURS: positiveInt(24),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

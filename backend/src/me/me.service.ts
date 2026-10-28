@@ -96,7 +96,7 @@ export class MeService {
 
   /** A profile save shouldn't fail because Walrus Memory is down or not configured. */
   private async rememberSafely(address: string, kind: "goal" | "limit" | "preference", text: string): Promise<MemoryOutcome> {
-    if (!this.memory.configured) return { kind, text, status: "skipped", reason: "not_configured" };
+    if (!(await this.memory.availableFor(address))) return { kind, text, status: "skipped", reason: "not_configured" };
     try {
       await this.memory.remember(address, { kind, text, source: "You told Sovra" });
       return { kind, text, status: "saved" };

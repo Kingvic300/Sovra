@@ -9,6 +9,7 @@ import { ENV, type Env } from "../config/env.js";
 export type RateLimitPolicy = "auth" | "demo" | "ask" | "import";
 
 type Rule = { limit: number; windowMs: number; by: "ip" | "user" };
+type RuleName = RateLimitPolicy | "global" | "demoAsk";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -17,13 +18,15 @@ const RATE_LIMIT_KEY = "sovra:rateLimit";
 /** Adds a stricter limit to a route, on top of the global per-IP limit. */
 export const RateLimit = (policy: RateLimitPolicy) => SetMetadata(RATE_LIMIT_KEY, policy);
 
-export function rateLimitRules(env: Env): Record<RateLimitPolicy | "global", Rule> {
+export function rateLimitRules(env: Env): Record<RuleName, Rule> {
   return {
     global: { limit: env.RATE_LIMIT_GLOBAL_PER_MINUTE, windowMs: MINUTE, by: "ip" },
     auth: { limit: env.RATE_LIMIT_AUTH_PER_MINUTE, windowMs: MINUTE, by: "ip" },
     demo: { limit: env.RATE_LIMIT_DEMO_PER_HOUR, windowMs: HOUR, by: "ip" },
     ask: { limit: env.RATE_LIMIT_ASK_PER_HOUR, windowMs: HOUR, by: "user" },
     import: { limit: env.RATE_LIMIT_IMPORT_PER_HOUR, windowMs: HOUR, by: "user" },
+    // Every demo visitor is a new user, so per-user limits alone don't cap AI spend from demos.
+    demoAsk: { limit: env.RATE_LIMIT_DEMO_ASK_PER_HOUR, windowMs: HOUR, by: "ip" },
   };
 }
 
@@ -61,6 +64,7 @@ export class RateLimitStore {
  * Global guard: every request counts against its IP's global limit, and routes marked with
  * @RateLimit also count against their policy. User-keyed policies use the session's address
  * (read from the signed cookie, as guards on the route haven't run yet) and fall back to the IP.
+ * Demo sessions asking questions also count against a per-IP demo limit.
  */
 @Injectable()
 export class RateLimitGuard implements CanActivate {
@@ -84,13 +88,14 @@ export class RateLimitGuard implements CanActivate {
     this.consume("global", ip, res);
     const policy = this.reflector.getAllAndOverride<RateLimitPolicy | undefined>(RATE_LIMIT_KEY, [ctx.getHandler(), ctx.getClass()]);
     if (policy) {
-      const subject = this.rules[policy].by === "user" ? ((await this.sessionUser(req)) ?? ip) : ip;
-      this.consume(policy, subject, res);
+      const session = this.rules[policy].by === "user" ? await this.session(req) : undefined;
+      this.consume(policy, session ? `user:${session.sub}` : ip, res);
+      if (policy === "ask" && session?.method === "demo") this.consume("demoAsk", ip, res);
     }
     return true;
   }
 
-  private consume(policy: RateLimitPolicy | "global", subject: string, res: Response) {
+  private consume(policy: RuleName, subject: string, res: Response) {
     const rule = this.rules[policy];
     const { allowed, retryAfterSeconds } = this.store.hit(`${policy}|${subject}`, rule.limit, rule.windowMs);
     if (allowed) return;
@@ -102,12 +107,11 @@ export class RateLimitGuard implements CanActivate {
     );
   }
 
-  private async sessionUser(req: Request) {
+  private async session(req: Request) {
     const token: unknown = req.cookies?.[SESSION_COOKIE];
     if (typeof token !== "string" || !token) return undefined;
     try {
-      const payload = await this.jwt.verifyAsync<Session & { sub: string }>(token);
-      return `user:${payload.sub}`;
+      return await this.jwt.verifyAsync<Session & { sub: string }>(token);
     } catch {
       return undefined;
     }
