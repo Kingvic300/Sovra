@@ -1,20 +1,81 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { Bell, CircleAlert, Repeat } from "lucide-react";
+import { Bell, ChevronRight, CircleAlert, CircleCheck, Repeat } from "lucide-react";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { budgetViews, useAppData } from "@/lib/app-data";
 import { CATEGORIES, TODAY } from "@/lib/demo-data";
 import { daysBetween, money, relativeDays } from "@/lib/format";
+import { useMediaQuery } from "@/lib/use-media-query";
 
 type Alert = { id: string; icon: typeof Bell; title: string; body: string; to: string; tone: "over" | "caution" };
+
+const TONES = {
+  over: "bg-over-soft text-over",
+  caution: "bg-caution-soft text-caution",
+};
+
+function AlertGroup({ label, alerts, onPick }: { label: string; alerts: Alert[]; onPick: () => void }) {
+  if (!alerts.length) return null;
+  return (
+    <section>
+      <h3 className="px-3 pt-3 pb-1 text-[13px] font-semibold text-muted">{label}</h3>
+      <ul>
+        {alerts.map((a) => (
+          <li key={a.id}>
+            <Link to={a.to} onClick={onPick} className="flex items-start gap-3 rounded-2xl px-3 py-3 transition-colors hover:bg-porcelain">
+              <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${TONES[a.tone]}`}>
+                <a.icon className="size-5" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold">{a.title}</span>
+                <span className="block text-[14px] text-muted">{a.body}</span>
+              </span>
+              <ChevronRight className="mt-2.5 size-4 shrink-0 text-muted" aria-hidden />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function AlertList({ alerts, onPick }: { alerts: Alert[]; onPick: () => void }) {
+  if (!alerts.length) {
+    return (
+      <div className="flex flex-col items-center px-6 py-8 text-center">
+        <span className="grid size-12 place-items-center rounded-2xl bg-gain-soft text-gain">
+          <CircleCheck className="size-6" aria-hidden />
+        </span>
+        <p className="mt-3 font-semibold">You're all caught up</p>
+        <p className="mt-1 text-[14px] text-muted">Sovra will tell you before a bill renews or a budget runs over.</p>
+      </div>
+    );
+  }
+  return (
+    <>
+      <AlertGroup label="Needs attention" alerts={alerts.filter((a) => a.tone === "over")} onPick={onPick} />
+      <AlertGroup label="Coming up" alerts={alerts.filter((a) => a.tone === "caution")} onPick={onPick} />
+      <Link
+        to="/app/recurring"
+        onClick={onPick}
+        className="mt-2 flex min-h-11 items-center justify-center rounded-xl text-[14px] font-semibold text-cobalt hover:bg-cobalt-soft"
+      >
+        See all bills and subscriptions
+      </Link>
+    </>
+  );
+}
 
 /** Bell with alerts built from the user's data: budgets going over and renewals due soon. */
 export function NotificationsButton() {
   const { data } = useAppData();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  // Phones get a bottom sheet like the rest of the mobile shell; wider screens a popover.
+  const wide = useMediaQuery("(min-width: 640px)");
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !wide) return;
     const onPointer = (e: PointerEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("pointerdown", onPointer);
@@ -23,7 +84,7 @@ export function NotificationsButton() {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, wide]);
 
   const alerts: Alert[] = [
     ...budgetViews(data)
@@ -35,7 +96,7 @@ export function NotificationsButton() {
         body: b.renewalSentence
           ? `${b.renewalSentence}, taking it to ${money(b.projected, { whole: true })} of ${money(b.limit, { whole: true })}.`
           : `Spending is at ${money(b.projected, { whole: true })} of ${money(b.limit, { whole: true })}.`,
-        to: "/app",
+        to: "/app/budgets",
         tone: "over" as const,
       })),
     ...data.recurring
@@ -49,6 +110,7 @@ export function NotificationsButton() {
         tone: "caution" as const,
       })),
   ];
+  const close = () => setOpen(false);
 
   return (
     <div ref={root} className="relative">
@@ -56,7 +118,7 @@ export function NotificationsButton() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-haspopup="true"
+        aria-haspopup={wide ? "true" : "dialog"}
         aria-label={alerts.length ? `Notifications, ${alerts.length} new` : "Notifications"}
         className="relative grid size-11 place-items-center rounded-full text-ink transition-colors hover:bg-card"
       >
@@ -68,27 +130,24 @@ export function NotificationsButton() {
         )}
       </button>
 
-      {open && (
-        <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-40 overflow-hidden rounded-card bg-card shadow-pop ring-1 ring-line sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-96">
-          <p className="border-b border-line px-4 py-3 font-semibold">Notifications</p>
-          {alerts.length ? (
-            <ul className="max-h-[60dvh] divide-y divide-line overflow-y-auto">
-              {alerts.map((a) => (
-                <li key={a.id}>
-                  <Link to={a.to} onClick={() => setOpen(false)} className="flex gap-3 px-4 py-3.5 hover:bg-porcelain">
-                    <a.icon className={`mt-0.5 size-5 shrink-0 ${a.tone === "over" ? "text-over" : "text-caution"}`} aria-hidden />
-                    <span>
-                      <span className="block font-semibold">{a.title}</span>
-                      <span className="block text-[14px] text-muted">{a.body}</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-4 py-6 text-center text-muted">You're all caught up. Sovra will tell you before anything renews.</p>
-          )}
-        </div>
+      {wide ? (
+        open && (
+          <div className="absolute right-0 z-40 mt-2 w-[400px] overflow-hidden rounded-card bg-card shadow-pop ring-1 ring-line">
+            <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+              <h2 className="font-bold">Notifications</h2>
+              {alerts.length > 0 && (
+                <span className="rounded-full bg-over-soft px-2 py-0.5 text-[12px] font-semibold text-over">{alerts.length} new</span>
+              )}
+            </div>
+            <div className="max-h-[70dvh] overflow-y-auto overscroll-contain px-2 pb-2">
+              <AlertList alerts={alerts} onPick={close} />
+            </div>
+          </div>
+        )
+      ) : (
+        <BottomSheet open={open} onClose={close} title="Notifications">
+          <AlertList alerts={alerts} onPick={close} />
+        </BottomSheet>
       )}
     </div>
   );
