@@ -126,15 +126,21 @@ export class AuthService {
     }
   }
 
-  /** Records the user when a database is configured; sessions still work without one. */
+  /**
+   * Records the user when a database is configured; sessions still work without one.
+   * Only the profile fields this sign-in provided are updated, so a sign-in without
+   * Google claims neither fails nor wipes the name and email saved earlier.
+   */
   private async upsertUser(session: Session) {
     if (!this.database.available) return;
-    await this.database.db
+    const insert = this.database.db
       .insert(users)
-      .values({ address: session.address, method: session.method, name: session.name, email: session.email })
-      .onConflictDoUpdate({
-        target: users.address,
-        set: { name: session.name, email: session.email },
-      });
+      .values({ address: session.address, method: session.method, name: session.name, email: session.email });
+    const set = Object.fromEntries(
+      Object.entries({ name: session.name, email: session.email }).filter(([, value]) => value !== undefined),
+    );
+    await (Object.keys(set).length
+      ? insert.onConflictDoUpdate({ target: users.address, set })
+      : insert.onConflictDoNothing());
   }
 }
