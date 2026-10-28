@@ -37,7 +37,8 @@ const GoalBody = z.object({
   due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "due must be YYYY-MM-DD"),
   weekly: money.nullish(),
 });
-const GoalPatch = GoalBody.partial();
+/** No defaults here: a field left out of a PATCH must keep its value, not reset to the create default. */
+const GoalPatch = GoalBody.extend({ saved: money }).partial();
 
 @Injectable()
 export class GoalsService {
