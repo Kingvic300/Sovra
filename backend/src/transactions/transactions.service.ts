@@ -70,7 +70,15 @@ export class TransactionsService {
     const preview = parsed.rows.slice(0, 20).map(({ raw: _raw, line: _line, ...row }) => row);
 
     if (options.preview) {
-      return { preview: true, columns: parsed.columns, dateOrder: parsed.dateOrder, total: parsed.rows.length, rows: preview, skipped: parsed.skipped };
+      return {
+        preview: true,
+        columns: parsed.columns,
+        dateOrder: parsed.dateOrder,
+        total: parsed.rows.length,
+        closingBalance: parsed.closingBalance,
+        rows: preview,
+        skipped: parsed.skipped,
+      };
     }
 
     const db = this.database.db;
@@ -83,6 +91,7 @@ export class TransactionsService {
         userAddress: session.address,
         kind: "csv",
         name: options.accountName?.trim() || file.filename.replace(/\.csv$/i, ""),
+        balance: parsed.closingBalance == null ? null : parsed.closingBalance.toFixed(2),
         syncedAt: new Date(),
       })
       .returning();
@@ -105,7 +114,7 @@ export class TransactionsService {
 
     return {
       preview: false,
-      account: { id: account.id, name: account.name, kind: account.kind },
+      account: { id: account.id, name: account.name, kind: account.kind, balance: account.balance == null ? null : Number(account.balance) },
       imported: parsed.rows.length,
       learnedApplied: categorizedBy.rules,
       categorizedBy,

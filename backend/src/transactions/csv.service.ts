@@ -22,6 +22,8 @@ export type ColumnMap = {
   amount?: string;
   debit?: string;
   credit?: string;
+  /** Running balance after each row, when the bank includes one. */
+  balance?: string;
 };
 
 const MONTHS: Record<string, number> = {
@@ -70,7 +72,21 @@ export class CsvService {
       });
     });
 
-    return { columns, dateOrder: order, rows, skipped };
+    return { columns, dateOrder: order, rows, skipped, closingBalance: this.closingBalance(parsed.data, rows, columns) };
+  }
+
+  /**
+   * The account balance after the statement's latest row, read from its balance column.
+   * Statements run oldest-first or newest-first, so among rows on the latest date this takes
+   * the one that comes last in time. Null when there is no balance column or it can't be read.
+   */
+  private closingBalance(records: Record<string, string>[], rows: ParsedRow[], columns: ColumnMap): number | null {
+    if (!columns.balance || rows.length === 0) return null;
+    const latest = rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0].date);
+    const newestFirst = rows[0].date > rows[rows.length - 1].date;
+    const onLatest = rows.filter((r) => r.date === latest);
+    const row = newestFirst ? onLatest[0] : onLatest[onLatest.length - 1];
+    return this.toNumber(records[row.line - 2]?.[columns.balance] ?? "");
   }
 
   private detectColumns(headers: string[]): ColumnMap {
@@ -79,6 +95,7 @@ export class CsvService {
     const amount = pick(headers, /amount/, /balance/);
     const debit = pick(headers, /debit|withdrawal|money out|paid out|^dr$/);
     const credit = pick(headers, /credit|deposit|money in|paid in|^cr$/);
+    const balance = pick(headers, /balance/, /opening/);
 
     if (!date || !description || (!amount && !debit && !credit)) {
       throw badRequest(
@@ -86,7 +103,7 @@ export class CsvService {
         "csv_columns_not_found",
       );
     }
-    return { date, description, amount: amount ?? undefined, debit, credit };
+    return { date, description, amount: amount ?? undefined, debit, credit, balance };
   }
 
   /** If any first part is above 12 the file is day-first; if any second part is, month-first. Default day-first. */

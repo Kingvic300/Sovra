@@ -13,8 +13,8 @@ export function RefreshBalanceButton() {
   async function refresh() {
     setBusy(true);
     try {
-      const { usdc } = await api<{ usdc: number }>("/wallet/balance");
-      toast.success({ title: "Balance updated", description: `${money(usdc)} USDC on Sui.` });
+      const { amount, usdc } = await api<{ amount?: number; usdc: string }>("/wallet/balance");
+      toast.success({ title: "Balance updated", description: `${money(amount ?? Number(usdc))} USDC on Sui.` });
     } catch (e) {
       toast.error({
         title: "Couldn't refresh the balance",

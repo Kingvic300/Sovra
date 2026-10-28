@@ -17,8 +17,10 @@ async function fetchUsdcBalance(): Promise<number | null> {
   try {
     const res = await fetch("/api/wallet/balance", { credentials: "include" });
     if (!res.ok) return null;
-    const body = (await res.json()) as { usdc?: number };
-    return typeof body.usdc === "number" ? body.usdc : null;
+    // `amount` is a number; `usdc` is the same value as an exact decimal string (older backends only send that).
+    const body = (await res.json()) as { amount?: number; usdc?: string };
+    const value = typeof body.amount === "number" ? body.amount : Number(body.usdc);
+    return Number.isFinite(value) ? value : null;
   } catch {
     return null;
   }

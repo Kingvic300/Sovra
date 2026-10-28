@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AccountsModule } from "./accounts/accounts.module.js";
 import { AiModule } from "./ai/ai.module.js";
 import { AskModule } from "./ask/ask.module.js";
 import { AuthModule } from "./auth/auth.module.js";
@@ -25,6 +26,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     MemoryModule,
     MeModule,
     TransactionsModule,
+    AccountsModule,
     BudgetsModule,
     GoalsModule,
     RecurringModule,
