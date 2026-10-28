@@ -22,6 +22,7 @@ const GENEROUS_RATE_LIMITS = {
   RATE_LIMIT_DEMO_PER_HOUR: "100000",
   RATE_LIMIT_ASK_PER_HOUR: "100000",
   RATE_LIMIT_IMPORT_PER_HOUR: "100000",
+  RATE_LIMIT_DEMO_ASK_PER_HOUR: "100000",
 };
 
 /** Stands in for Groq. Records every call so tests can check what the model would have seen. */
@@ -50,9 +51,12 @@ export class FakeAi implements AiProvider {
 /** Stands in for the Walrus Memory relayer: stores memories per namespace and recalls by substring. */
 export class FakeMemWal {
   readonly stored: { namespace: string; text: string; blobId: string }[] = [];
+  /** Every call that reached the relayer, for asserting that some flows never touch Walrus. */
+  calls = 0;
   private jobs = 0;
 
   async remember(text: string, namespace: string) {
+    this.calls++;
     const jobId = `job-${++this.jobs}`;
     this.stored.push({ namespace, text, blobId: `blob-${jobId}` });
     return { job_id: jobId };
@@ -63,6 +67,7 @@ export class FakeMemWal {
   }
 
   async recall({ query, limit, namespace }: { query: string; limit: number; namespace: string }) {
+    this.calls++;
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const results = this.stored
       .filter((m) => m.namespace === namespace && words.some((w) => m.text.toLowerCase().includes(w)))

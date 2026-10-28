@@ -10,6 +10,7 @@
     "start:dev": "nest start --watch --exec \"node --env-file-if-exists=.env\"",
     "build": "nest build",
     "start:prod": "node --env-file-if-exists=.env dist/main.js",
+    "demo:cleanup": "node --env-file-if-exists=.env dist/scripts/demo-cleanup.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:build": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
     "test": "npm run test:build && node --enable-source-maps --test \"dist-test/**/*.spec.js\"",

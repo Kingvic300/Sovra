@@ -53,7 +53,7 @@ export class AuthController {
   }
 
   private async startSession(session: Session, res: Response) {
-    res.cookie(SESSION_COOKIE, await this.auth.sign(session), this.auth.cookieOptions());
+    res.cookie(SESSION_COOKIE, await this.auth.sign(session), this.auth.cookieOptions(session));
     return { user: session };
   }
 }

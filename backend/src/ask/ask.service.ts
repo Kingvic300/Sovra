@@ -58,7 +58,9 @@ export class AskService {
 
     const db = this.database.available;
     const [memories, profile, budgets, goals, recent, upcoming, wallet] = await Promise.all([
-      attempt("memories", this.memory.configured, () => this.memory.recall(session.address, question, MEMORY_LIMIT)),
+      attempt("memories", await this.memory.availableFor(session.address), () =>
+        this.memory.recall(session.address, question, MEMORY_LIMIT),
+      ),
       attempt("profile", db, async () => {
         const [p] = await this.database.db.select().from(profiles).where(eq(profiles.userAddress, session.address));
         return p ? { name: p.name, payday: p.payday ?? undefined } : undefined;

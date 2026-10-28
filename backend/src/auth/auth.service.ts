@@ -9,7 +9,8 @@ import { ENV, type Env } from "../config/env.js";
 import { DatabaseService } from "../database/database.service.js";
 import { authNonces, users } from "../database/schema.js";
 import { TatumService } from "../wallet/tatum.service.js";
-import { DEMO_ADDRESS, SESSION_TTL_SECONDS, type Session } from "./session.js";
+import { DemoService } from "./demo.service.js";
+import { SESSION_TTL_SECONDS, type Session } from "./session.js";
 
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
@@ -24,6 +25,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly database: DatabaseService,
     private readonly tatum: TatumService,
+    private readonly demoAccounts: DemoService,
   ) {}
 
   /** Builds the exact message the wallet signs. The nonce makes each sign-in single-use. */
@@ -80,26 +82,30 @@ export class AuthService {
     return session;
   }
 
-  async demo() {
-    const session: Session = { address: DEMO_ADDRESS, method: "demo", name: "Ada Okafor" };
-    await this.upsertUser(session);
-    return session;
+  /** A fresh, seeded demo account for this visitor. */
+  demo() {
+    return this.demoAccounts.create();
+  }
+
+  /** Demo sessions last exactly as long as their demo account. */
+  ttlSeconds(session: Pick<Session, "method">) {
+    return session.method === "demo" ? this.demoAccounts.ttlSeconds : SESSION_TTL_SECONDS;
   }
 
   sign(session: Session) {
     return this.jwt.signAsync(
       { sub: session.address, method: session.method, name: session.name, email: session.email },
-      { expiresIn: SESSION_TTL_SECONDS },
+      { expiresIn: this.ttlSeconds(session) },
     );
   }
 
-  cookieOptions() {
+  cookieOptions(session: Pick<Session, "method"> = { method: "google" }) {
     return {
       httpOnly: true,
       sameSite: "lax" as const,
       secure: this.env.NODE_ENV === "production",
       path: "/",
-      maxAge: SESSION_TTL_SECONDS * 1000,
+      maxAge: this.ttlSeconds(session) * 1000,
     };
   }
 
