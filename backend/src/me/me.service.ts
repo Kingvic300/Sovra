@@ -16,6 +16,14 @@ export type ProfileInput = {
   sources: { csv: boolean; sui: boolean };
 };
 
+/** JSON with object keys sorted. Postgres jsonb reorders keys, so plain JSON.stringify can't compare saved values. */
+const canonicalJson = (value: unknown) =>
+  JSON.stringify(value ?? null, (_, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+      : v,
+  );
+
 type MemoryOutcome = { kind: string; text: string; status: "saved" | "skipped" | "failed"; reason?: string };
 
 @Injectable()
@@ -61,7 +69,7 @@ export class MeService {
       .returning();
 
     const memories: MemoryOutcome[] = [];
-    const changed = (a: unknown, b: unknown) => JSON.stringify(a ?? null) !== JSON.stringify(b ?? null);
+    const changed = (a: unknown, b: unknown) => canonicalJson(a) !== canonicalJson(b);
 
     if (input.goal && changed(input.goal, previous?.goal)) {
       await db.insert(goals).values({
