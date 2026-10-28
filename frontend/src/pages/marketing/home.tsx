@@ -1,10 +1,11 @@
 import { Link } from "react-router";
-import { ArrowLeftRight, ChartPie, KeyRound, MessageSquareText, Repeat, ShieldCheck, Target, Wallet } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, ChartPie, KeyRound, MessageSquareText, Repeat, ShieldCheck, Target, Wallet } from "lucide-react";
 import { CtaBand, MemoryCard, Section } from "@/components/marketing/blocks";
 import { Logo } from "@/components/shell/logo";
 import { buttonClass } from "@/components/ui/button-class";
 import { Progress } from "@/components/ui/progress";
 import { Remembered } from "@/components/ui/remembered";
+import { useAuth } from "@/lib/auth-context";
 import { useTitle } from "@/lib/use-title";
 
 const HERO_MEMORIES = [
@@ -119,6 +120,7 @@ const STACK = [
 
 export default function HomePage() {
   useTitle();
+  const { status } = useAuth();
   return (
     <>
       <Section className="!pt-12 lg:!pt-20">
@@ -132,12 +134,21 @@ export default function HomePage() {
               anything and get an answer that fits your life, not an average.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link to="/signup" className={`${buttonClass()} h-12 px-6 text-[15px]`}>
-                Get started with Google
-              </Link>
-              <Link to="/signin" className={`${buttonClass("secondary")} h-12 px-6 text-[15px]`}>
-                Try the demo
-              </Link>
+              {status === "signed-in" ? (
+                <Link to="/app" className={`${buttonClass()} h-12 px-6 text-[15px]`}>
+                  Open Sovra
+                  <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              ) : (
+                <>
+                  <Link to="/signup" className={`${buttonClass()} h-12 px-6 text-[15px]`}>
+                    Get started with Google
+                  </Link>
+                  <Link to="/signin" className={`${buttonClass("secondary")} h-12 px-6 text-[15px]`}>
+                    Try the demo
+                  </Link>
+                </>
+              )}
             </div>
             <p className="mt-5 text-[14px] text-muted">No seed phrase. No bank password. Sovra never moves your money.</p>
           </div>

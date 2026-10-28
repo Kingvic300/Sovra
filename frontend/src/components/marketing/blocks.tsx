@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { buttonClass } from "@/components/ui/button-class";
 import { Remembered } from "@/components/ui/remembered";
+import { useAuth } from "@/lib/auth-context";
 
 /** Full-width page section with consistent side padding. */
 export function Section({ children, className = "", id }: { children: ReactNode; className?: string; id?: string }) {
@@ -44,6 +45,7 @@ export function MemoryCard({ items, className = "" }: { items: { text: string; h
 }
 
 export function CtaBand() {
+  const { status } = useAuth();
   return (
     <section className="bg-cobalt px-5 py-16 text-white sm:px-8 lg:px-14 lg:py-20">
       <div className="flex flex-wrap items-end justify-between gap-8">
@@ -56,12 +58,20 @@ export function CtaBand() {
           </p>
         </div>
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-          <Link to="/signup" className={`${buttonClass()} h-12 bg-white px-6 text-[15px] !text-cobalt hover:!bg-white/90`}>
-            Get started free
-          </Link>
-          <Link to="/signin" className={`${buttonClass()} h-12 bg-white/10 px-6 text-[15px] hover:!bg-white/20`}>
-            Try the demo
-          </Link>
+          {status === "signed-in" ? (
+            <Link to="/app" className={`${buttonClass()} h-12 bg-white px-6 text-[15px] !text-cobalt hover:!bg-white/90`}>
+              Open Sovra
+            </Link>
+          ) : (
+            <>
+              <Link to="/signup" className={`${buttonClass()} h-12 bg-white px-6 text-[15px] !text-cobalt hover:!bg-white/90`}>
+                Get started free
+              </Link>
+              <Link to="/signin" className={`${buttonClass()} h-12 bg-white/10 px-6 text-[15px] hover:!bg-white/20`}>
+                Try the demo
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </section>

@@ -17,6 +17,8 @@ function AccountActions({ onNavigate }: { onNavigate?: () => void }) {
   const { status, signOut } = useAuth();
   const navigate = useNavigate();
 
+  // Don't flash "Sign in" while a saved session is being restored.
+  if (status === "loading") return null;
   if (status === "signed-in") {
     return (
       <>
@@ -62,6 +64,7 @@ function AccountActions({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function MarketingHeader() {
+  const { status } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const close = () => setMenuOpen(false);
 
@@ -106,6 +109,11 @@ export function MarketingHeader() {
             <div className="hidden items-center gap-1 sm:flex">
               <AccountActions />
             </div>
+            {status === "signed-in" && (
+              <Link to="/app" onClick={close} className={`${buttonClass("primary", "sm")} sm:hidden`}>
+                Open Sovra
+              </Link>
+            )}
             <button
               type="button"
               aria-label={menuOpen ? "Close menu" : "Open menu"}
