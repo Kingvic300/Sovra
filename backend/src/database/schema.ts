@@ -136,6 +136,23 @@ export const memories = pgTable(
   (t) => [index("memories_user_idx").on(t.userAddress)],
 );
 
+/** Ask Sovra questions that got an answer, with the memories the answer used. */
+export const askMessages = pgTable(
+  "ask_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userAddress: text("user_address")
+      .notNull()
+      .references(() => users.address, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    usedMemories: jsonb("used_memories").$type<{ id: string | null; text: string }[]>().notNull().default([]),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ask_messages_user_created_idx").on(t.userAddress, t.createdAt, t.id)],
+);
+
 export const authNonces = pgTable("auth_nonces", {
   nonce: text("nonce").primaryKey(),
   address: text("address").notNull(),

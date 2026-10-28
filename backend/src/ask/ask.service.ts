@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { AI_PROVIDER, type AiProvider } from "../ai/ai.provider.js";
 import type { Session } from "../auth/session.js";
-import { notConfigured } from "../common/errors.js";
+import { badRequest, notConfigured } from "../common/errors.js";
 import { BudgetsService } from "../budgets/budgets.module.js";
 import { DatabaseService } from "../database/database.service.js";
-import { profiles } from "../database/schema.js";
+import { askMessages, profiles } from "../database/schema.js";
 import { GoalsService } from "../goals/goals.module.js";
 import { MemwalService } from "../memory/memwal.service.js";
 import { RecurringService } from "../recurring/recurring.module.js";
@@ -96,10 +96,71 @@ export class AskService {
       missing,
     });
 
+    const usedMemories = used.map((m) => ({ id: m.id, text: m.text }));
+    const saved = await this.saveToHistory(session.address, { question, answer: text, usedMemories, model });
     return {
       answer: text,
-      usedMemories: used.map((m) => ({ id: m.id, text: m.text })),
+      usedMemories,
       model,
+      id: saved?.id ?? null,
+      createdAt: saved?.createdAt.toISOString() ?? null,
     };
+  }
+
+  /**
+   * Keeps an answered question. Only answers that came back are saved (failures throw before this),
+   * and a failed save never costs the user the answer they already waited for.
+   */
+  private async saveToHistory(address: string, message: { question: string; answer: string; usedMemories: { id: string | null; text: string }[]; model: string }) {
+    if (!this.database.available) return null;
+    try {
+      const [row] = await this.database.db
+        .insert(askMessages)
+        .values({ userAddress: address, ...message })
+        .returning({ id: askMessages.id, createdAt: askMessages.createdAt });
+      return row;
+    } catch (err) {
+      this.logger.warn(`Could not save Ask history: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /**
+   * The user's questions and answers, newest first. `before` is the id of the oldest message
+   * already shown; the comparison runs in Postgres so timestamps keep their full precision.
+   */
+  async history(address: string, page: { limit: number; before?: string }) {
+    const db = this.database.db;
+    const conditions = [eq(askMessages.userAddress, address)];
+    if (page.before) {
+      const [anchor] = await db
+        .select({ id: askMessages.id })
+        .from(askMessages)
+        .where(and(eq(askMessages.id, page.before), eq(askMessages.userAddress, address)));
+      if (!anchor) throw badRequest("That page of history no longer exists. Reload to start again.", "invalid_cursor");
+      conditions.push(
+        sql`(${askMessages.createdAt}, ${askMessages.id}) < (select created_at, id from ask_messages where id = ${page.before})`,
+      );
+    }
+    const rows = await db
+      .select()
+      .from(askMessages)
+      .where(and(...conditions))
+      .orderBy(desc(askMessages.createdAt), desc(askMessages.id))
+      .limit(page.limit + 1);
+    const messages = rows.slice(0, page.limit).map((m) => ({
+      id: m.id,
+      question: m.question,
+      answer: m.answer,
+      usedMemories: m.usedMemories,
+      model: m.model,
+      createdAt: m.createdAt.toISOString(),
+    }));
+    return { messages, nextCursor: rows.length > page.limit ? messages[messages.length - 1].id : null };
+  }
+
+  async clearHistory(address: string) {
+    const deleted = await this.database.db.delete(askMessages).where(eq(askMessages.userAddress, address)).returning({ id: askMessages.id });
+    return { deleted: deleted.length };
   }
 }

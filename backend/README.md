@@ -102,7 +102,9 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | PATCH | `/goals/:id` | Partial update |
 | DELETE | `/goals/:id` | Removes a goal |
 | GET | `/recurring` | Repeating charges detected from the last 120 days |
-| POST | `/ask` | `{question}` → `{answer, usedMemories: [{id, text}], model}`. `503 not_configured` without `GROQ_API_KEY`, `429 rate_limited`, `502 ai_upstream_error` |
+| POST | `/ask` | `{question}` → `{answer, usedMemories: [{id, text}], model, id, createdAt}`. `503 not_configured` without `GROQ_API_KEY`, `429 rate_limited`, `502 ai_upstream_error`. Answered questions are saved to history (`id` is null without a database) |
+| GET | `/ask/history?limit=&before=` | `{messages, nextCursor}`: saved questions and answers, newest first. `limit` 1 to 50 (default 20); pass `nextCursor` as `before` for the next page |
+| DELETE | `/ask/history` | Clears the user's Ask history → `{deleted}` |
 
 ## Security
 
