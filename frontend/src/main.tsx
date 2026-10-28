@@ -24,6 +24,7 @@ import NotFoundPage from '@/pages/not-found'
 import OnboardingPage from '@/pages/onboarding'
 import OverviewPage from '@/pages/overview'
 import PrivacyPage from '@/pages/privacy'
+import ProfilePage from '@/pages/profile'
 import RecurringPage from '@/pages/recurring'
 import RouteErrorPage from '@/pages/route-error'
 import TermsPage from '@/pages/terms'
@@ -64,6 +65,7 @@ const router = createBrowserRouter([
           { path: 'accounts', element: <AccountsPage /> },
           { path: 'memory', element: <MemoryPage /> },
           { path: 'ask', element: <AskPage /> },
+          { path: 'profile', element: <ProfilePage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Check, ChevronDown, Copy, FileText, LogOut, ShieldCheck } from "lucide-react";
+import { Check, ChevronDown, Copy, FileText, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { shortAddress } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
@@ -100,6 +100,9 @@ export function ProfileMenu() {
             </button>
           </div>
           <nav className="flex flex-col py-1.5 text-[14px]">
+            <Link to="/app/profile" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-4 py-2 font-semibold hover:bg-porcelain">
+              <UserRound className="size-4 text-muted" aria-hidden /> Profile and settings
+            </Link>
             <Link to="/security" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-4 py-2 hover:bg-porcelain">
               <ShieldCheck className="size-4 text-muted" aria-hidden /> How Sovra keeps you safe
             </Link>
