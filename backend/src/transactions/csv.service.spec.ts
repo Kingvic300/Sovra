@@ -13,7 +13,8 @@ describe("CsvService.parse", () => {
       ["Date,Description,Amount", "2026-10-03,NETFLIX.COM,-17.99", "2026-10-25,Salary ACME,1800.00"].join("\n"),
       noRules,
     );
-    assert.deepEqual(result.columns, { date: "Date", description: "Description", amount: "Amount", debit: undefined, credit: undefined });
+    assert.deepEqual(result.columns, { date: "Date", description: "Description", amount: "Amount", debit: undefined, credit: undefined, balance: undefined });
+    assert.equal(result.closingBalance, null);
     assert.equal(result.rows.length, 2);
     assert.deepEqual(
       result.rows.map(({ date, merchant, amount, category }) => ({ date, merchant, amount, category })),
@@ -121,6 +122,35 @@ describe("CsvService.parse", () => {
   it("keeps the original row for auditing", () => {
     const result = csv.parse(["Date,Description,Amount,Ref", "2026-10-01,X,-1,abc"].join("\n"), noRules);
     assert.deepEqual(result.rows[0].raw, { Date: "2026-10-01", Description: "X", Amount: "-1", Ref: "abc" });
+  });
+
+  it("reads the closing balance from the latest row, whichever way the statement is sorted", () => {
+    const oldestFirst = csv.parse(
+      ["Date,Description,Debit,Credit,Balance", "01/10/2026,A,10,,990", "03/10/2026,B,,500,1490", "03/10/2026,C,40,,1450"].join("\n"),
+      noRules,
+    );
+    assert.equal(oldestFirst.columns.balance, "Balance");
+    assert.equal(oldestFirst.closingBalance, 1450);
+
+    const newestFirst = csv.parse(
+      ["Date,Description,Amount,Running Balance", "2026-10-03,C,-40,1450", "2026-10-03,B,500,1490", "2026-10-01,A,-10,990"].join("\n"),
+      noRules,
+    );
+    assert.equal(newestFirst.closingBalance, 1450);
+  });
+
+  it("reads overdrawn balances and ignores opening-balance columns", () => {
+    const overdrawn = csv.parse(["Date,Description,Amount,Balance", "2026-10-01,Rent,-500,\"(120.50)\""].join("\n"), noRules);
+    assert.equal(overdrawn.closingBalance, -120.5);
+
+    const opening = csv.parse(["Date,Description,Amount,Opening Balance", "2026-10-01,X,-1,100"].join("\n"), noRules);
+    assert.equal(opening.columns.balance, undefined);
+    assert.equal(opening.closingBalance, null);
+  });
+
+  it("leaves the closing balance unknown when the latest row has none", () => {
+    const result = csv.parse(["Date,Description,Amount,Balance", "2026-10-01,X,-1,99", "2026-10-02,Y,-1,"].join("\n"), noRules);
+    assert.equal(result.closingBalance, null);
   });
 
   it("rejects files without date, description and amount columns", () => {

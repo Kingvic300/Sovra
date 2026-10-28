@@ -16,7 +16,8 @@ export class WalletController {
   @Get("balance")
   async balance(@CurrentSession() session: Session) {
     const { raw, usdc } = await this.tatum.getUsdcBalance(session.address);
-    return { address: session.address, coinType: USDC_COIN_TYPE, raw, usdc, syncedAt: new Date().toISOString() };
+    // `usdc` stays an exact decimal string; `amount` is the same value as a number for display and comparisons.
+    return { address: session.address, coinType: USDC_COIN_TYPE, raw, usdc, amount: Number(usdc), syncedAt: new Date().toISOString() };
   }
 
   @Get("transactions")

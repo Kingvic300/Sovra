@@ -10,7 +10,9 @@ import { SESSION_COOKIE } from "../auth/session.js";
 import { ENV, loadEnv } from "../config/env.js";
 import { DatabaseService } from "../database/database.service.js";
 import { MemwalService } from "../memory/memwal.service.js";
+import { upstreamFailed } from "../common/errors.js";
 import type { CategoryId } from "../shared/categories.js";
+import { TatumService } from "../wallet/tatum.service.js";
 import type { TestDatabase } from "./test-database.js";
 
 export const TEST_SESSION_SECRET = "test-session-secret-not-for-production";
@@ -79,6 +81,27 @@ export class FakeMemWal {
   destroy() {}
 }
 
+/** Stands in for Tatum. Balances are set per address; `failing` makes every read fail like an outage. */
+export class FakeTatum {
+  readonly configured = true;
+  readonly verificationClient = undefined;
+  readonly balances = new Map<string, string>();
+  failing = false;
+  calls = 0;
+
+  async getUsdcBalance(address: string) {
+    this.calls++;
+    if (this.failing) throw upstreamFailed("Tatum", "fake outage");
+    const usdc = this.balances.get(address) ?? "0";
+    return { raw: String(Math.round(Number(usdc) * 1e6)), usdc };
+  }
+
+  async getRecentUsdcTransfers() {
+    this.calls++;
+    return [];
+  }
+}
+
 export type TestApp = {
   app: INestApplication;
   baseUrl: string;
@@ -92,7 +115,7 @@ export type TestApp = {
  * External services are off unless a fake is passed, so tests never call Groq, Walrus or Tatum.
  */
 export async function createTestApp(
-  options: { database?: TestDatabase; ai?: AiProvider; memwal?: FakeMemWal; env?: Record<string, string> } = {},
+  options: { database?: TestDatabase; ai?: AiProvider; memwal?: FakeMemWal; tatum?: FakeTatum; env?: Record<string, string> } = {},
 ): Promise<TestApp> {
   // Set TEST_LOGS=1 to see server-side errors while debugging a test.
   const logger = process.env.TEST_LOGS ? (["error", "warn"] as const) : false;
@@ -102,6 +125,7 @@ export async function createTestApp(
   let builder = Test.createTestingModule({ imports: [AppModule] }).overrideProvider(ENV).useValue(env);
   if (options.database) builder = builder.overrideProvider(DatabaseService).useValue(options.database.service);
   if (options.ai) builder = builder.overrideProvider(AI_PROVIDER).useValue(options.ai);
+  if (options.tatum) builder = builder.overrideProvider(TatumService).useValue(options.tatum);
   const moduleRef = await builder.compile();
 
   if (options.memwal) {

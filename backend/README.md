@@ -80,15 +80,19 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | POST | `/auth/logout` | Clears the cookie |
 | GET | `/me` | Session user and saved profile (`profile: null` without a database) |
 | PUT | `/me/profile` | Saves onboarding answers; new goal, limit and payday also become goal/budget rows and memories |
-| GET | `/wallet/balance` | USDC balance at the user's address |
+| GET | `/wallet/balance` | USDC balance at the user's address: `usdc` (exact decimal string) and `amount` (number) |
 | GET | `/wallet/transactions?limit=` | Recent USDC transfers in and out |
 | GET | `/wallet/deposit` | Address, network, token and coin type for the top-up screen |
 | GET | `/memories?kind=` | The user's memories, newest first, excluding forgotten ones |
 | POST | `/memories` | `{kind, text, source?}` → remembers something |
 | POST | `/memories/recall` | `{query, limit?}` → semantic search over the user's memories |
 | DELETE | `/memories/:id` | Forgets a memory (see below) |
+| GET | `/accounts` | `{accounts, wallet}`: bank accounts with balance (null when unknown), transaction count and last transaction date; the Sui wallet read live (`status`: `live`, `not_configured`, `unavailable`, `skipped_demo`) |
+| GET | `/accounts/summary` | `total` (known balances + live wallet), `banks`, `wallet`, `missing` (what couldn't be counted, never guessed), a 30-day `trend` and `change30d` |
+| PATCH | `/accounts/:id` | `{name?, balance?}`; `balance: null` marks it unknown |
+| DELETE | `/accounts/:id` | Deletes the account and the transactions imported into it |
 | GET | `/transactions?month=&category=&limit=` | Transactions, newest first |
-| POST | `/transactions/import?preview=1&dateOrder=dmy` | Multipart CSV `file` (+ optional `accountName`). With `preview=1` nothing is saved. On import, merchants without a learned rule are categorized by Groq when configured; the response's `categorizedBy` counts rules, AI and keyword fallbacks |
+| POST | `/transactions/import?preview=1&dateOrder=dmy` | Multipart CSV `file` (+ optional `accountName`). With `preview=1` nothing is saved. When the CSV has a balance column, the balance after its latest row becomes the account balance (`closingBalance` in the preview). On import, merchants without a learned rule are categorized by Groq when configured; the response's `categorizedBy` counts rules, AI and keyword fallbacks |
 | PATCH | `/transactions/:id` | `{category, remember}`. With `remember: true` it saves a merchant rule, recategorizes that merchant and writes a memory |
 | GET | `/budgets?month=` | Limits with spending for the month |
 | PUT | `/budgets/:category` | `{limit}` |
@@ -169,6 +173,7 @@ src/
   me/                     profile and onboarding
   transactions/           CSV import (CsvService), list, recategorize with learned rules
   ask/                    grounded Q&A over the user's data and memories
+  accounts/               account list, edits, totals and 30-day trend
   budgets/ goals/ recurring/
   e2e/                    integration tests against the real app
   testing/                test helpers and fakes (not part of the build)
