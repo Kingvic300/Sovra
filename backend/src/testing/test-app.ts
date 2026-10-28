@@ -15,6 +15,15 @@ import type { TestDatabase } from "./test-database.js";
 
 export const TEST_SESSION_SECRET = "test-session-secret-not-for-production";
 
+/** Rate limits high enough that ordinary tests never hit them. Rate-limit tests lower them through `env`. */
+const GENEROUS_RATE_LIMITS = {
+  RATE_LIMIT_GLOBAL_PER_MINUTE: "100000",
+  RATE_LIMIT_AUTH_PER_MINUTE: "100000",
+  RATE_LIMIT_DEMO_PER_HOUR: "100000",
+  RATE_LIMIT_ASK_PER_HOUR: "100000",
+  RATE_LIMIT_IMPORT_PER_HOUR: "100000",
+};
+
 /** Stands in for Groq. Records every call so tests can check what the model would have seen. */
 export class FakeAi implements AiProvider {
   readonly answers: AnswerInput[] = [];
@@ -68,7 +77,8 @@ export class FakeMemWal {
 export type TestApp = {
   app: INestApplication;
   baseUrl: string;
-  client: () => TestClient;
+  /** `headers` are sent with every request, e.g. X-Forwarded-For to act as a different client IP. */
+  client: (headers?: Record<string, string>) => TestClient;
   close: () => Promise<void>;
 };
 
@@ -82,7 +92,7 @@ export async function createTestApp(
   // Set TEST_LOGS=1 to see server-side errors while debugging a test.
   const logger = process.env.TEST_LOGS ? (["error", "warn"] as const) : false;
   Logger.overrideLogger(logger ? [...logger] : false);
-  const env = loadEnv({ NODE_ENV: "test", SESSION_SECRET: TEST_SESSION_SECRET, ...options.env });
+  const env = loadEnv({ NODE_ENV: "test", SESSION_SECRET: TEST_SESSION_SECRET, ...GENEROUS_RATE_LIMITS, ...options.env });
 
   let builder = Test.createTestingModule({ imports: [AppModule] }).overrideProvider(ENV).useValue(env);
   if (options.database) builder = builder.overrideProvider(DatabaseService).useValue(options.database.service);
@@ -103,7 +113,7 @@ export async function createTestApp(
   return {
     app,
     baseUrl,
-    client: () => new TestClient(baseUrl),
+    client: (headers) => new TestClient(baseUrl, headers),
     close: () => app.close(),
   };
 }
@@ -114,14 +124,17 @@ export type TestResponse<T = any> = { status: number; body: T; headers: Headers 
 export class TestClient {
   cookie: string | undefined;
 
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly defaultHeaders: Record<string, string> = {},
+  ) {}
 
   async request<T = any>(
     method: string,
     path: string,
     options: { json?: unknown; form?: FormData; headers?: Record<string, string> } = {},
   ): Promise<TestResponse<T>> {
-    const headers: Record<string, string> = { ...options.headers };
+    const headers: Record<string, string> = { ...this.defaultHeaders, ...options.headers };
     if (this.cookie) headers.cookie = this.cookie;
     let body: string | FormData | undefined;
     if (options.json !== undefined) {

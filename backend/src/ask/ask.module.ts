@@ -8,6 +8,7 @@ import { ZodPipe } from "../common/zod.pipe.js";
 import { GoalsModule } from "../goals/goals.module.js";
 import { MemoryModule } from "../memory/memory.module.js";
 import { RecurringModule } from "../recurring/recurring.module.js";
+import { RateLimit } from "../security/rate-limit.js";
 import { TransactionsModule } from "../transactions/transactions.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { AskService } from "./ask.service.js";
@@ -21,6 +22,7 @@ export class AskController {
 
   @Post()
   @HttpCode(200)
+  @RateLimit("ask")
   ask(@CurrentSession() s: Session, @Body(new ZodPipe(AskBody)) body: z.infer<typeof AskBody>) {
     return this.asker.ask(s, body.question);
   }

@@ -48,7 +48,13 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build and tests for the backend,
 | `SESSION_SECRET` | yes | Signs the session cookie. At least 16 characters. |
 | `PORT` | no | Defaults to `8787`. |
 | `FRONTEND_ORIGIN` | no | CORS origin allowed with credentials. Defaults to `http://localhost:5173`. |
-| `NODE_ENV` | no | `production` makes the cookie `Secure`. |
+| `NODE_ENV` | no | `production` makes the cookie `Secure` and adds HSTS. |
+| `TRUST_PROXY` | no | Proxies in front of the API. Defaults to `1`; use `false` when clients connect directly. See [Security](#security). |
+| `RATE_LIMIT_GLOBAL_PER_MINUTE` | no | Requests per minute per IP, all routes. Defaults to `300`. |
+| `RATE_LIMIT_AUTH_PER_MINUTE` | no | `/auth/nonce` + `/auth/verify` per minute per IP. Defaults to `20`. |
+| `RATE_LIMIT_DEMO_PER_HOUR` | no | `/auth/demo` per hour per IP. Defaults to `10`. |
+| `RATE_LIMIT_ASK_PER_HOUR` | no | `/ask` per hour per user. Defaults to `30`. |
+| `RATE_LIMIT_IMPORT_PER_HOUR` | no | `/transactions/import` (previews included) per hour per user. Defaults to `30`. |
 | `DATABASE_URL` | for data routes | Postgres connection string. |
 | `TATUM_API_KEY` | for wallet reads | Sent as `x-api-key` to Tatum's Sui gateway. |
 | `MEMWAL_KEY` | for memories | Walrus Memory delegate **private** key. Server only. |
@@ -91,6 +97,29 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | GET | `/recurring` | Repeating charges detected from the last 120 days |
 | POST | `/ask` | `{question}` → `{answer, usedMemories: [{id, text}], model}`. `503 not_configured` without `GROQ_API_KEY`, `429 rate_limited`, `502 ai_upstream_error` |
 
+## Security
+
+**Headers.** Every response, errors and CORS preflights included, gets a deny-all `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy`, a restrictive `Permissions-Policy` and `Cache-Control: no-store` (responses hold personal financial data). `Strict-Transport-Security` is added when `NODE_ENV=production`. `X-Powered-By` is off.
+
+**Rate limits.** A global guard (`src/security/rate-limit.ts`) counts every request against its IP's global limit. Routes marked `@RateLimit(policy)` also count against a stricter policy:
+
+| Policy | Routes | Keyed by | Default |
+| --- | --- | --- | --- |
+| `auth` | `POST /auth/nonce`, `POST /auth/verify` (shared) | IP | 20 / minute |
+| `demo` | `POST /auth/demo` | IP | 10 / hour |
+| `ask` | `POST /ask` (paid AI call) | signed-in user, else IP | 30 / hour |
+| `import` | `POST /transactions/import` (may call the AI model) | signed-in user, else IP | 30 / hour |
+
+Going over answers `429 {"error":{"code":"rate_limited"}}` with a `Retry-After` header, before the route does any work. Limits are checked before the file upload is read.
+
+Known limitation: counters live in process memory. Each instance counts separately and counts reset on restart, so with N instances a client can make up to N times a limit. Move the store to Postgres or Redis before scaling out.
+
+**Client IPs and `TRUST_PROXY`.** Per-IP limits use Express's `req.ip`, which reads `X-Forwarded-For` through as many proxies as `TRUST_PROXY` says. Set it to the real number of proxies in front of the API (`1` behind one load balancer, which is the default). If it's higher than reality, clients can send their own `X-Forwarded-For` and pick their IP; if the API is reached directly, set it to `false`.
+
+**Errors.** Malformed JSON (400), bodies over 100 kB (413), CSVs over 5 MB (413), unknown routes (404) and unexpected failures (500, details only in the server log) all use the `{ "error": { "code", "message" } }` shape.
+
+**Authorization.** Every route except `health` and `auth/*` requires the session cookie, and every query filters by the session's address. Integration tests check that one user can't read or change another's transactions, budgets, goals or memories.
+
 ## How the integrations work
 
 **Sign-in (zkLogin).** The frontend signs in with Google through Enoki, which gives the user a Sui address. To prove it to this server, the frontend asks `/auth/nonce` for a challenge, signs that exact string with `signPersonalMessage`, and posts it to `/auth/verify`. The server checks the signature with `verifyPersonalMessageSignature` from `@mysten/sui/verify`, passing a Sui GraphQL client, because zkLogin signatures are verified on-chain. Nonces are single-use and expire after five minutes.
@@ -119,6 +148,7 @@ src/
   config/                 zod-validated env (ENV token)
   database/               Drizzle schema + DatabaseService (503 when no DATABASE_URL)
   common/                 AppError helpers, exception filter, ZodPipe
+  security/               rate limiting guard and security headers
   shared/                 categories, merchant keys, memory sentences
   auth/                   nonce/verify/demo/logout, SessionGuard, @CurrentSession
   wallet/                 TatumService (Sui GraphQL via Tatum), wallet routes

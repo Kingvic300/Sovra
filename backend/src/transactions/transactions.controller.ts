@@ -17,6 +17,7 @@ import { CurrentSession, type Session } from "../auth/session.js";
 import { SessionGuard } from "../auth/session.guard.js";
 import { badRequest } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
+import { RateLimit } from "../security/rate-limit.js";
 import { CATEGORY_IDS } from "../shared/categories.js";
 import { TransactionsService } from "./transactions.service.js";
 
@@ -49,6 +50,7 @@ export class TransactionsController {
 
   /** multipart/form-data with a `file` field. Add `?preview=1` to check the columns without saving. */
   @Post("import")
+  @RateLimit("import")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_CSV_BYTES } }))
   import(
     @CurrentSession() s: Session,
