@@ -69,10 +69,10 @@ export class TransactionsController {
     const upload = { buffer: file.buffer, filename: file.originalname, mimetype: file.mimetype };
     if (!statementFormat(upload)) throw badRequest("Upload a CSV, Excel (.xlsx) or PDF statement.", "unsupported_file");
     // Demo accounts never call the AI model, so they can't import PDFs.
-    const content = await this.statements.toCsv(upload, { allowAi: s.method !== "demo" });
+    const sheets = await this.statements.toSheets(upload, { allowAi: s.method !== "demo" });
     return this.txs.importCsv(
       s,
-      { content, filename: file.originalname },
+      { sheets: sheets.map((sheet) => ({ name: sheet.name, content: sheet.csv })), filename: file.originalname },
       { preview: q.preview, dateOrder: q.dateOrder, accountName: body.accountName },
     );
   }

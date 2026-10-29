@@ -89,6 +89,16 @@ export class CsvService {
     return this.toNumber(records[row.line - 2]?.[columns.balance] ?? "");
   }
 
+  /** Whether a row could be this statement's header: it names a date, a description and an amount. */
+  hasColumns(headers: string[]) {
+    try {
+      this.detectColumns(headers.map((h) => h.trim()));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private detectColumns(headers: string[]): ColumnMap {
     const date = pick(headers, /date|posted|time/, /value date/) ?? pick(headers, /date/);
     const description = pick(headers, /description|narration|details|merchant|payee|memo|remarks|particulars|reference/);

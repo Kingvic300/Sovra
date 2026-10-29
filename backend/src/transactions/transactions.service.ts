@@ -20,6 +20,12 @@ const toApi = (t: typeof transactions.$inferSelect) => ({
   learnedFrom: t.learnedFromMemoryId ?? undefined,
 });
 
+/** "Wallet Account Transactions" → "Wallet Account". Falls back when the sheet has no useful name. */
+export function accountNameForSheet(sheet: string | null, fallback: string) {
+  const name = (sheet ?? "").replace(/\s+(transactions?|statement|history)$/i, "").trim();
+  return !name || /^sheet\s*\d*$/i.test(name) ? fallback : name.slice(0, 80);
+}
+
 /** "2026-10" → [2026-10-01, 2026-11-01) */
 export function monthRange(month: string) {
   const [y, m] = month.split("-").map(Number);
@@ -59,66 +65,95 @@ export class TransactionsService {
     return new Map(rows.map((r) => [r.merchantKey, r.category as CategoryId]));
   }
 
-  /** Parses a statement. With `preview`, nothing is saved. */
+  /**
+   * Parses a statement and, unless `preview`, saves it. A workbook with several sheets becomes one
+   * account per sheet (for example "Wallet Account" and "Savings Account").
+   */
   async importCsv(
     session: Session,
-    file: { content: string; filename: string },
+    file: { sheets: { name: string | null; content: string }[]; filename: string },
     options: { preview: boolean; accountName?: string; dateOrder?: DateOrder },
   ) {
     const rules = this.database.available ? await this.rules(session.address) : new Map<string, CategoryId>();
-    const parsed = this.csv.parse(file.content, rules, options.dateOrder);
-    const preview = parsed.rows.slice(0, 20).map(({ raw: _raw, line: _line, ...row }) => row);
+    const base = options.accountName?.trim() || file.filename.replace(/\.(csv|xlsx|pdf)$/i, "");
+    const many = file.sheets.length > 1;
+    const parsedSheets = file.sheets
+      .map((sheet, i) => ({
+        name: many ? accountNameForSheet(sheet.name, `${base} ${i + 1}`) : base,
+        parsed: this.csv.parse(sheet.content, rules, options.dateOrder),
+      }))
+      // A sheet whose rows are all unreadable shouldn't become an empty account; keep at least one so errors show.
+      .filter((s, i, all) => s.parsed.rows.length > 0 || (i === 0 && all.every((x) => x.parsed.rows.length === 0)));
+    const allRows = parsedSheets.flatMap((s) => s.parsed.rows);
+    const skipped = parsedSheets.flatMap((s) => (many ? s.parsed.skipped.map((k) => ({ ...k, sheet: s.name })) : s.parsed.skipped));
+    const first = parsedSheets[0].parsed;
+    const summaries = parsedSheets.map((s) => ({ name: s.name, total: s.parsed.rows.length, closingBalance: s.parsed.closingBalance }));
 
     if (options.preview) {
       return {
         preview: true,
-        columns: parsed.columns,
-        dateOrder: parsed.dateOrder,
-        total: parsed.rows.length,
-        closingBalance: parsed.closingBalance,
-        rows: preview,
-        skipped: parsed.skipped,
+        columns: first.columns,
+        dateOrder: first.dateOrder,
+        total: allRows.length,
+        closingBalance: many ? null : first.closingBalance,
+        accounts: summaries,
+        rows: allRows.slice(0, 20).map(({ raw: _raw, line: _line, ...row }) => row),
+        skipped,
       };
     }
 
     const db = this.database.db;
     // Demo accounts get keyword categories only, so a public demo can't run up AI costs.
-    const categorizedBy = await this.refineCategories(parsed.rows, session.method !== "demo");
+    // All sheets are categorized together so a merchant seen in two of them is sent once.
+    const categorizedBy = await this.refineCategories(allRows, session.method !== "demo");
     await db.insert(users).values({ address: session.address, method: session.method, name: session.name }).onConflictDoNothing();
-    const [account] = await db
-      .insert(accounts)
-      .values({
-        userAddress: session.address,
-        kind: "csv",
-        name: options.accountName?.trim() || file.filename.replace(/\.(csv|xlsx|pdf)$/i, ""),
-        balance: parsed.closingBalance == null ? null : parsed.closingBalance.toFixed(2),
-        syncedAt: new Date(),
-      })
-      .returning();
 
-    const BATCH = 500;
-    for (let i = 0; i < parsed.rows.length; i += BATCH) {
-      await db.insert(transactions).values(
-        parsed.rows.slice(i, i + BATCH).map((r) => ({
+    const saved: { id: string; name: string; kind: string; balance: number | null; imported: number }[] = [];
+    for (const sheet of parsedSheets) {
+      const [account] = await db
+        .insert(accounts)
+        .values({
           userAddress: session.address,
-          accountId: account.id,
-          date: r.date,
-          merchant: r.merchant,
-          merchantKey: r.merchantKey,
-          amount: r.amount.toFixed(2),
-          category: r.category,
-          raw: r.raw,
-        })),
-      );
+          kind: "csv",
+          name: sheet.name,
+          balance: sheet.parsed.closingBalance == null ? null : sheet.parsed.closingBalance.toFixed(2),
+          syncedAt: new Date(),
+        })
+        .returning();
+
+      const BATCH = 500;
+      for (let i = 0; i < sheet.parsed.rows.length; i += BATCH) {
+        await db.insert(transactions).values(
+          sheet.parsed.rows.slice(i, i + BATCH).map((r) => ({
+            userAddress: session.address,
+            accountId: account.id,
+            date: r.date,
+            merchant: r.merchant,
+            merchantKey: r.merchantKey,
+            amount: r.amount.toFixed(2),
+            category: r.category,
+            raw: r.raw,
+          })),
+        );
+      }
+      saved.push({
+        id: account.id,
+        name: account.name,
+        kind: account.kind,
+        balance: account.balance == null ? null : Number(account.balance),
+        imported: sheet.parsed.rows.length,
+      });
     }
 
+    const { imported: _imported, ...firstAccount } = saved[0];
     return {
       preview: false,
-      account: { id: account.id, name: account.name, kind: account.kind, balance: account.balance == null ? null : Number(account.balance) },
-      imported: parsed.rows.length,
+      account: firstAccount,
+      accounts: saved,
+      imported: allRows.length,
       learnedApplied: categorizedBy.rules,
       categorizedBy,
-      skipped: parsed.skipped,
+      skipped,
     };
   }
 

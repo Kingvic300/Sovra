@@ -29,11 +29,13 @@ function pdf(lines: string[]) {
 async function xlsx() {
   const book = new ExcelJS.Workbook();
   const sheet = book.addWorksheet("Statement");
-  sheet.addRow(["First Bank: account statement"]);
+  // Laid out like a Nigerian wallet statement: a title block (with a "Date Printed" line) above the table.
+  sheet.addRow(["Wallet Account Statement", "", "", "", "Date Printed", "29 Oct 2026 14:40:12"]);
+  sheet.addRow(["Account Name", "Ada Okafor"]);
   sheet.addRow([]);
-  sheet.addRow(["Date", "Description", "Amount", "Balance"]);
-  sheet.addRow([new Date(Date.UTC(2026, 9, 1)), "Shoprite", -38.2, 961.8]);
-  sheet.addRow([new Date(Date.UTC(2026, 9, 2)), "Upwork payout", 650, 1611.8]);
+  sheet.addRow(["Trans. Date", "Value Date", "Description", "Debit(₦)", "Credit(₦)", "Balance After(₦)", "Channel"]);
+  sheet.addRow(["01 Oct 2026 09:12:03", "01 Oct 2026", "Shoprite", "38.20", "--", "961.80", "POS"]);
+  sheet.addRow([new Date(Date.UTC(2026, 9, 2)), new Date(Date.UTC(2026, 9, 2)), "Upwork payout", "--", 650, 1611.8, "Transfer"]);
   return Buffer.from(await book.xlsx.writeBuffer());
 }
 
@@ -59,7 +61,7 @@ describe("statement import from Excel and PDF", () => {
     await database.close();
   });
 
-  it("reads the table in an Excel workbook, below any title rows", async () => {
+  it("reads the table in an Excel workbook, below a title block that mentions dates", async () => {
     const client = api.client();
     await signIn(client);
     const preview = await client.request("POST", "/transactions/import?preview=1", { form: form(await xlsx(), "oct.xlsx", XLSX) });
@@ -75,6 +77,44 @@ describe("statement import from Excel and PDF", () => {
     assert.equal(saved.status, 201);
     assert.equal(saved.body.imported, 2);
     assert.equal(saved.body.account.name, "oct");
+  });
+
+  it("imports each sheet of a workbook as its own account", async () => {
+    const book = new ExcelJS.Workbook();
+    for (const [title, rows] of [
+      ["Wallet Account Transactions", [["01 Oct 2026", "Bolt", "6.20", "--", "93.80"], ["02 Oct 2026", "Transfer to savings", "50.00", "--", "43.80"]]],
+      ["Savings Account Transactions", [["02 Oct 2026", "Transfer from wallet", "--", "50.00", "550.00"]]],
+    ] as const) {
+      const sheet = book.addWorksheet(title);
+      sheet.addRow([title.replace(" Transactions", " Statement"), "", "Date Printed", "29 Oct 2026"]);
+      sheet.addRow(["Trans. Date", "Description", "Debit(₦)", "Credit(₦)", "Balance After(₦)"]);
+      for (const row of rows) sheet.addRow([...row]);
+    }
+    book.addWorksheet("Notes").addRow(["Thank you for banking with us"]);
+    const file = Buffer.from(await book.xlsx.writeBuffer());
+    const client = api.client();
+    await signIn(client);
+
+    const preview = await client.request("POST", "/transactions/import?preview=1", { form: form(file, "statement.xlsx", XLSX) });
+    assert.equal(preview.status, 201);
+    assert.equal(preview.body.total, 3);
+    assert.deepEqual(preview.body.accounts, [
+      { name: "Wallet Account", total: 2, closingBalance: 43.8 },
+      { name: "Savings Account", total: 1, closingBalance: 550 },
+    ]);
+
+    const saved = await client.request("POST", "/transactions/import", { form: form(file, "statement.xlsx", XLSX) });
+    assert.equal(saved.status, 201);
+    assert.equal(saved.body.imported, 3);
+    assert.deepEqual(
+      saved.body.accounts.map((a: { name: string; imported: number; balance: number }) => [a.name, a.imported, a.balance]),
+      [["Wallet Account", 2, 43.8], ["Savings Account", 1, 550]],
+    );
+    const listed = await client.get("/accounts");
+    assert.deepEqual(
+      listed.body.accounts.map((a: { name: string; transactionCount: number }) => [a.name, a.transactionCount]).sort(),
+      [["Savings Account", 1], ["Wallet Account", 2]],
+    );
   });
 
   it("reads a PDF's transactions with the AI model, once for preview and import", async () => {

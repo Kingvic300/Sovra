@@ -5,8 +5,11 @@ import Papa from "papaparse";
 import { extractText, getDocumentProxy } from "unpdf";
 import { AI_PROVIDER, type AiProvider } from "../ai/ai.provider.js";
 import { badRequest } from "../common/errors.js";
+import { CsvService } from "./csv.service.js";
 
 export type StatementFile = { buffer: Buffer; filename: string; mimetype: string };
+/** One table of transactions. Workbooks can hold several, one per sheet; `name` is the sheet's. */
+export type StatementSheet = { name: string | null; csv: string };
 export type StatementFormat = "csv" | "xlsx" | "pdf";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -46,34 +49,45 @@ export class StatementReaderService {
   private readonly logger = new Logger(StatementReaderService.name);
   private readonly pdfCache = new Map<string, { csv: string; at: number }>();
 
-  constructor(@Inject(AI_PROVIDER) private readonly ai: AiProvider) {}
+  constructor(
+    @Inject(AI_PROVIDER) private readonly ai: AiProvider,
+    private readonly csv: CsvService,
+  ) {}
 
-  async toCsv(file: StatementFile, options: { allowAi: boolean }): Promise<string> {
+  async toSheets(file: StatementFile, options: { allowAi: boolean }): Promise<StatementSheet[]> {
     const format = statementFormat(file);
-    if (format === "csv") return file.buffer.toString("utf8");
-    if (format === "xlsx") return this.excelToCsv(file.buffer);
-    if (format === "pdf") return this.pdfToCsv(file.buffer, options.allowAi);
+    if (format === "csv") return [{ name: null, csv: file.buffer.toString("utf8") }];
+    if (format === "xlsx") return this.excelToSheets(file.buffer);
+    if (format === "pdf") return [{ name: null, csv: await this.pdfToCsv(file.buffer, options.allowAi) }];
     throw badRequest("Upload a CSV, Excel (.xlsx) or PDF statement.", "unsupported_file");
   }
 
-  private async excelToCsv(buffer: Buffer) {
+  private async excelToSheets(buffer: Buffer) {
     const workbook = new ExcelJS.Workbook();
     try {
       await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
     } catch {
       throw badRequest("That Excel file couldn't be opened. Save it as .xlsx and try again.", "unreadable_file");
     }
-    // Banks often put a title or account details above the table, so start at the row that names a date column.
+    // Banks put a title block above the table (account name, "Date Printed", period), so the header is
+    // the first row CsvService can read as date, description and amount columns, with rows under it.
+    // Every sheet with such a table is kept: one workbook often holds several accounts (wallet, savings).
+    const sheets: StatementSheet[] = [];
     for (const sheet of workbook.worksheets) {
       const rows: string[][] = [];
       sheet.eachRow({ includeEmpty: false }, (row) => {
-        const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+        // Array.from fills the gaps exceljs leaves for empty cells, so columns stay aligned.
+        const values = Array.isArray(row.values) ? Array.from(row.values).slice(1) : [];
         rows.push(values.map((v) => cellText(v as ExcelJS.CellValue).trim()));
       });
-      const header = rows.findIndex((r) => r.some((c) => /date/i.test(c)));
-      if (header !== -1 && rows.length > header + 1) return Papa.unparse(rows.slice(header));
+      const header = rows.findIndex((r, i) => i < rows.length - 1 && this.csv.hasColumns(r));
+      if (header !== -1) sheets.push({ name: sheet.name, csv: Papa.unparse(rows.slice(header)) });
     }
-    throw badRequest("Couldn't find a table with a date column in that workbook.", "no_transactions");
+    if (sheets.length) return sheets;
+    throw badRequest(
+      "Couldn't find a table with date, description and amount columns in that workbook.",
+      "csv_columns_not_found",
+    );
   }
 
   private async pdfToCsv(buffer: Buffer, allowAi: boolean) {
