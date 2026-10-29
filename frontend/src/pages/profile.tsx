@@ -72,6 +72,8 @@ function IdentityCard({ session, name }: { session: Session; name: string }) {
         </div>
       </div>
 
+      {/* An email-only account's address is an internal id nobody holds keys for, so it is never shown as a wallet. */}
+      {session.method !== "email" && (
       <button
         type="button"
         onClick={copyAddress}
@@ -79,11 +81,12 @@ function IdentityCard({ session, name }: { session: Session; name: string }) {
         className="flex min-h-11 items-center justify-between gap-4 rounded-xl bg-white/10 px-4 py-2.5 text-left transition-colors hover:bg-white/15 sm:min-w-64"
       >
         <span>
-          <span className="block text-[12px] text-white/70">Your Sui address</span>
+          <span className="block text-[12px] text-white/70">{session.method === "demo" ? "Demo wallet (sample)" : "Your Sui address"}</span>
           <span className="block font-semibold tabular-nums">{shortAddress(session.address)}</span>
         </span>
         {copied ? <Check className="size-5" aria-label="Copied" /> : <Copy className="size-5 text-white/70" aria-label="Copy address" />}
       </button>
+      )}
     </section>
   );
 }

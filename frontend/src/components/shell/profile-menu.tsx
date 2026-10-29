@@ -83,13 +83,15 @@ export function ProfileMenu() {
           <div className="border-b border-line px-4 py-3">
             <p className="font-semibold">{name}</p>
             <p className="text-[13px] text-muted">{detail}</p>
+            {/* An email-only account's address is an internal id nobody holds keys for, so it is never shown as a wallet. */}
+            {session.method !== "email" && (
             <button
               type="button"
               onClick={copyAddress}
               className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg bg-porcelain px-3 py-2 text-left text-[13px]"
             >
               <span>
-                <span className="block text-muted">Your Sui address</span>
+                <span className="block text-muted">{session.method === "demo" ? "Demo wallet (sample)" : "Your Sui address"}</span>
                 <span className="font-semibold tabular-nums">{shortAddress(session.address)}</span>
               </span>
               {copied ? (
@@ -98,6 +100,7 @@ export function ProfileMenu() {
                 <Copy className="size-4 text-muted" aria-label="Copy address" />
               )}
             </button>
+            )}
           </div>
           <nav className="flex flex-col py-1.5 text-[14px]">
             <Link to="/app/profile" onClick={() => setOpen(false)} className="flex items-center gap-2.5 px-4 py-2 font-semibold hover:bg-porcelain">

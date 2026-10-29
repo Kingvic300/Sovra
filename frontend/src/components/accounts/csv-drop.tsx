@@ -8,8 +8,21 @@ import { money, shortDate, signedMoney } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 type PreviewRow = { date: string; merchant: string; amount: number; category: CategoryId; learned: boolean };
-type Preview = { total: number; closingBalance: number | null; rows: PreviewRow[]; skipped: { line: number; reason: string }[] };
-type Imported = { imported: number; account: { name: string }; categorizedBy: { rules: number; ai: number; keywords: number } };
+/** A workbook with several sheets becomes one account per sheet; `accounts` lists them. */
+type PreviewAccount = { name: string; total: number; closingBalance: number | null };
+type Preview = {
+  total: number;
+  closingBalance: number | null;
+  accounts?: PreviewAccount[];
+  rows: PreviewRow[];
+  skipped: { line: number; reason: string }[];
+};
+type Imported = {
+  imported: number;
+  account: { name: string };
+  accounts?: { name: string; imported: number }[];
+  categorizedBy: { rules: number; ai: number; keywords: number };
+};
 
 /** Statement files the backend reads: CSV as is, the first table in an Excel workbook, a PDF's text through the AI model. */
 const ACCEPTED = /\.(csv|xlsx|pdf)$/i;
@@ -81,7 +94,11 @@ export function CsvDrop() {
       const learned = res.categorizedBy.rules;
       toast.success({
         title: `${res.imported} transactions imported`,
-        description: `Added to ${res.account.name}.${learned ? ` ${learned} filed by rules Sovra learned from you.` : ""}`,
+        description: `${
+          res.accounts && res.accounts.length > 1
+            ? `Added ${res.accounts.map((a) => `${a.imported} to ${a.name}`).join(" and ")}.`
+            : `Added to ${res.account.name}.`
+        }${learned ? ` ${learned} filed by rules Sovra learned from you.` : ""}`,
       });
       setFile(null);
       setPreview(null);
@@ -108,6 +125,19 @@ export function CsvDrop() {
             <span className="text-muted"> {preview.skipped.length} rows skipped because they couldn't be read.</span>
           )}
         </p>
+        {preview.accounts && preview.accounts.length > 1 && (
+          <ul className="mt-3 flex flex-col gap-1.5 rounded-lg bg-porcelain px-3.5 py-2.5 text-[14px]">
+            <li className="text-[13px] font-semibold text-muted">Sovra will create {preview.accounts.length} accounts, one per sheet</li>
+            {preview.accounts.map((a) => (
+              <li key={a.name} className="flex justify-between gap-3">
+                <span className="font-medium">{a.name}</span>
+                <span className="text-muted tabular-nums">
+                  {a.total} transactions{a.closingBalance !== null && <>, {money(a.closingBalance)}</>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
         <ul className="mt-3 divide-y divide-line text-[14px]">
           {preview.rows.slice(0, 5).map((r, i) => (
             <li key={i} className="grid grid-cols-[52px_1fr_auto] gap-3 py-2">
