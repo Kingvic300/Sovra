@@ -16,7 +16,7 @@ const TREND_DAYS = 30;
 const cents = (n: number) => Math.round(n * 100) / 100;
 const isoDay = (t: number) => new Date(t).toISOString().slice(0, 10);
 
-export type WalletStatus = "live" | "not_configured" | "unavailable" | "skipped_demo";
+export type WalletStatus = "live" | "not_configured" | "unavailable" | "skipped_demo" | "no_wallet";
 
 const AccountPatch = z
   .object({
@@ -63,6 +63,7 @@ export class AccountsService {
   async wallet(session: Session): Promise<{ address: string; usdc: number | null; status: WalletStatus; syncedAt: string | null }> {
     const unread = { address: session.address, usdc: null, syncedAt: null };
     if (session.method === "demo") return { ...unread, status: "skipped_demo" };
+    if (session.method === "email") return { ...unread, status: "no_wallet" };
     if (!this.tatum.configured) return { ...unread, status: "not_configured" };
     try {
       const { usdc } = await this.tatum.getUsdcBalance(session.address);

@@ -1,15 +1,29 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { type CanActivate, Controller, type ExecutionContext, Get, Injectable, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
+import { conflict } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
-import { CurrentSession, type Session } from "../auth/session.js";
+import { CurrentSession, type RequestWithSession, type Session } from "../auth/session.js";
 import { SessionGuard } from "../auth/session.guard.js";
 import { TatumService, USDC_COIN_TYPE, USDC_DECIMALS } from "./tatum.service.js";
 
 const TransfersQuery = z.object({ limit: z.coerce.number().int().min(1).max(50).default(25) });
 
-/** USDC held at the user's zkLogin address, read from Sui mainnet through Tatum. */
+/**
+ * Email accounts' addresses are ids nobody holds keys for. Showing one as a deposit address
+ * would let someone send USDC that can never be spent, so these routes refuse them.
+ */
+@Injectable()
+class HasWalletGuard implements CanActivate {
+  canActivate(ctx: ExecutionContext) {
+    const session = ctx.switchToHttp().getRequest<RequestWithSession>().session;
+    if (session?.method === "email") throw conflict("Connect a Sui wallet to see balances or top up.", "no_wallet");
+    return true;
+  }
+}
+
+/** USDC held at the user's Sui address, read from Sui mainnet through Tatum. */
 @Controller("wallet")
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, HasWalletGuard)
 export class WalletController {
   constructor(private readonly tatum: TatumService) {}
 

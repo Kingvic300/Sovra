@@ -4,15 +4,18 @@ import { JwtService } from "@nestjs/jwt";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { normalizeSuiAddress, isValidSuiAddress } from "@mysten/sui/utils";
 import { and, eq, gt, lt } from "drizzle-orm";
-import { badRequest, unauthorized } from "../common/errors.js";
+import { badRequest, conflict, unauthorized } from "../common/errors.js";
 import { ENV, type Env } from "../config/env.js";
 import { DatabaseService } from "../database/database.service.js";
 import { authNonces, users } from "../database/schema.js";
 import { TatumService } from "../wallet/tatum.service.js";
 import { DemoService } from "./demo.service.js";
+import { dummyHash, hashPassword, verifyPassword } from "./password.js";
 import { SESSION_TTL_SECONDS, type Session } from "./session.js";
 
 const NONCE_TTL_MS = 5 * 60 * 1000;
+
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 @Injectable()
 export class AuthService {
@@ -79,6 +82,47 @@ export class AuthService {
 
     const session: Session = { address, method: "google", name: input.name, email: input.email };
     await this.upsertUser(session);
+    return session;
+  }
+
+  /**
+   * Creates an email account. It gets a random address nobody holds keys for, like a demo account,
+   * so every table keyed by address works; its wallet routes are refused (see WalletController).
+   */
+  async signUp(input: { email: string; password: string; name?: string }) {
+    const db = this.database.db;
+    const email = normalizeEmail(input.email);
+    const [taken] = await db
+      .select({ address: users.address })
+      .from(users)
+      .where(and(eq(users.method, "email"), eq(users.email, email)));
+    if (taken) throw conflict("An account with this email already exists. Sign in instead.", "email_taken");
+
+    const session: Session = {
+      address: normalizeSuiAddress(`0x${randomBytes(32).toString("hex")}`),
+      method: "email",
+      name: input.name?.trim() || undefined,
+      email,
+    };
+    const inserted = await db
+      .insert(users)
+      .values({ ...session, passwordHash: await hashPassword(input.password) })
+      .onConflictDoNothing()
+      .returning({ address: users.address });
+    // Two sign-ups for one email at once: the unique index lets only one through.
+    if (inserted.length === 0) throw conflict("An account with this email already exists. Sign in instead.", "email_taken");
+    return session;
+  }
+
+  async logIn(input: { email: string; password: string }) {
+    const email = normalizeEmail(input.email);
+    const [user] = await this.database.db
+      .select()
+      .from(users)
+      .where(and(eq(users.method, "email"), eq(users.email, email)));
+    const ok = await verifyPassword(input.password, user?.passwordHash ?? (await dummyHash()));
+    if (!user || !ok) throw unauthorized("That email and password don't match an account.");
+    const session: Session = { address: user.address, method: "email", name: user.name ?? undefined, email };
     return session;
   }
 

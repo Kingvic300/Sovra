@@ -76,10 +76,13 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | GET | `/health` | Liveness and which integrations are configured |
 | POST | `/auth/nonce` | `{address}` → `{message, expiresAt}`: the text to sign |
 | POST | `/auth/verify` | `{address, message, signature, name?, email?}` → checks the wallet signature, sets the cookie |
+| POST | `/auth/signup` | `{email, password, name?}` → creates an email account (password at least 8 characters, stored as a scrypt hash) and sets the cookie. `409 email_taken` if the email has an account |
+| POST | `/auth/login` | `{email, password}` → sets the cookie. A wrong password and an unknown email get the same `401` |
 | POST | `/auth/demo` | Creates a fresh demo account with sample data and starts its session (see [Demo accounts](#demo-accounts)) |
 | POST | `/auth/logout` | Clears the cookie |
 | GET | `/me` | Session user and saved profile (`profile: null` without a database) |
 | PUT | `/me/profile` | Saves onboarding answers; new goal, limit and payday also become goal/budget rows and memories |
+| GET | `/wallet/*` | Refused with `409 no_wallet` for email accounts: their address is only an id that nobody holds keys for |
 | GET | `/wallet/balance` | USDC balance at the user's address: `usdc` (exact decimal string) and `amount` (number) |
 | GET | `/wallet/transactions?limit=` | Recent USDC transfers in and out |
 | GET | `/wallet/deposit` | Address, network, token and coin type for the top-up screen |

@@ -69,7 +69,7 @@ describe("auth and sessions (with database)", () => {
     const nameOf = async () => (await database.db.select().from(users).where(eq(users.address, address)))[0];
 
     await signIn(api.client(), keypair);
-    assert.deepEqual({ ...(await nameOf()), createdAt: undefined }, { address, method: "google", name: null, email: null, createdAt: undefined, expiresAt: null }, "real accounts never expire");
+    assert.deepEqual({ ...(await nameOf()), createdAt: undefined }, { address, method: "google", name: null, email: null, createdAt: undefined, expiresAt: null, passwordHash: null }, "real accounts never expire");
 
     await signIn(api.client(), keypair, { name: "Ada Okafor", email: "ada@example.com" });
     assert.equal((await nameOf()).name, "Ada Okafor");

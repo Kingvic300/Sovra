@@ -22,6 +22,8 @@ export const badRequest = (message: string, code = "bad_request") =>
 export const unauthorized = (message = "Sign in to continue.") =>
   new AppError(HttpStatus.UNAUTHORIZED, "unauthorized", message);
 
+export const conflict = (message: string, code = "conflict") => new AppError(HttpStatus.CONFLICT, code, message);
+
 export const upstreamFailed = (service: string, detail?: string) =>
   new AppError(
     HttpStatus.BAD_GATEWAY,

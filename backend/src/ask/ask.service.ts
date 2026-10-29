@@ -74,7 +74,10 @@ export class AskService {
         const horizon = new Date(Date.now() + UPCOMING_DAYS * 86_400_000).toISOString().slice(0, 10);
         return (await this.recurring.list(session.address)).filter((r) => r.nextDate <= horizon);
       }),
-      attempt("Sui wallet balance", this.tatum.configured, () => this.tatum.getUsdcBalance(session.address)),
+      // Email accounts have no wallet; their address is only an id.
+      attempt("Sui wallet balance", this.tatum.configured && session.method !== "email", () =>
+        this.tatum.getUsdcBalance(session.address),
+      ),
     ]);
 
     if (profile) context.profile = profile;

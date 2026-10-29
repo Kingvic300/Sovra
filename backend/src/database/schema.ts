@@ -1,17 +1,26 @@
-import { boolean, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
   "users",
   {
+    /** The Sui address for wallet users; a random address nobody controls for demo and email accounts. */
     address: text("address").primaryKey(),
-    method: text("method", { enum: ["google", "demo"] }).notNull(),
+    /** "google" is a wallet sign-in; the name is left from when wallets were zkLogin accounts. */
+    method: text("method", { enum: ["google", "demo", "email"] }).notNull(),
     name: text("name"),
+    /** Lowercased for email accounts, which sign in with it. */
     email: text("email"),
+    /** Email accounts only: scrypt hash (see auth/password.ts). */
+    passwordHash: text("password_hash"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** Demo accounts only: when the account and everything in it is deleted. Null for real users. */
     expiresAt: timestamp("expires_at", { withTimezone: true }),
   },
-  (t) => [index("users_expires_at_idx").on(t.expiresAt)],
+  (t) => [
+    index("users_expires_at_idx").on(t.expiresAt),
+    uniqueIndex("users_email_account_idx").on(t.email).where(sql`${t.method} = 'email'`),
+  ],
 );
 
 export type GoalJson = { name: string; target: number; due: string };

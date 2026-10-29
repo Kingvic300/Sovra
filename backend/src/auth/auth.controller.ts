@@ -18,6 +18,16 @@ const VerifyBody = z.object({
   email: z.string().email().max(200).optional(),
 });
 
+const SignUpBody = z.object({
+  email: z.string().trim().email("Enter a valid email address.").max(200),
+  password: z.string().min(8, "Use at least 8 characters.").max(200),
+  name: z.string().trim().max(80).optional(),
+});
+const LogInBody = z.object({
+  email: z.string().trim().email("Enter a valid email address.").max(200),
+  password: z.string().min(1).max(200),
+});
+
 @Controller("auth")
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -35,6 +45,20 @@ export class AuthController {
   async verify(@Body(new ZodPipe(VerifyBody)) body: z.infer<typeof VerifyBody>, @Res({ passthrough: true }) res: Response) {
     const session = await this.auth.verify(body);
     return this.startSession(session, res);
+  }
+
+  @Post("signup")
+  @HttpCode(201)
+  @RateLimit("auth")
+  async signUp(@Body(new ZodPipe(SignUpBody)) body: z.infer<typeof SignUpBody>, @Res({ passthrough: true }) res: Response) {
+    return this.startSession(await this.auth.signUp(body), res);
+  }
+
+  @Post("login")
+  @HttpCode(200)
+  @RateLimit("auth")
+  async logIn(@Body(new ZodPipe(LogInBody)) body: z.infer<typeof LogInBody>, @Res({ passthrough: true }) res: Response) {
+    return this.startSession(await this.auth.logIn(body), res);
   }
 
   @Post("demo")
