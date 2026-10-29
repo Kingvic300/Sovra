@@ -161,6 +161,25 @@ export const memories = pgTable(
   (t) => [index("memories_user_idx").on(t.userAddress)],
 );
 
+/**
+ * Whether Sovra counts a detected recurring charge. Pausing here only changes Sovra's projections
+ * and reminders; it doesn't cancel anything with the merchant. Keyed by merchant so it survives
+ * new imports and re-detection.
+ */
+export const recurringStates = pgTable(
+  "recurring_states",
+  {
+    userAddress: text("user_address")
+      .notNull()
+      .references(() => users.address, { onDelete: "cascade" }),
+    merchantKey: text("merchant_key").notNull(),
+    status: text("status", { enum: ["active", "paused"] }).notNull(),
+    pausedAt: timestamp("paused_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userAddress, t.merchantKey] })],
+);
+
 /** Ask Sovra questions that got an answer, with the memories the answer used. */
 export const askMessages = pgTable(
   "ask_messages",
