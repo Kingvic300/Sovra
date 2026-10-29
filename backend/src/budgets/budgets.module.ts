@@ -8,18 +8,38 @@ import { ZodPipe } from "../common/zod.pipe.js";
 import { DatabaseService } from "../database/database.service.js";
 import { budgets, transactions, users } from "../database/schema.js";
 import { CATEGORY_IDS, CATEGORY_LABELS, type CategoryId } from "../shared/categories.js";
+import { RecurringModule, RecurringService, expectedDates } from "../recurring/recurring.module.js";
 import { monthRange } from "../transactions/transactions.service.js";
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
+const cents = (n: number) => Math.round(n * 100) / 100;
 
 @Injectable()
 export class BudgetsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly recurring: RecurringService,
+  ) {}
 
-  /** Limits for each category with what has been spent in `month`. */
-  async list(address: string, month: string) {
+  /**
+   * Limits for each category with what has been spent in `month`, plus `committed`: active recurring
+   * charges still expected before the month ends (paused ones don't count). `projected` is spent +
+   * committed. Months that have already ended have nothing committed.
+   */
+  async list(address: string, month: string, now = new Date()) {
     const db = this.database.db;
     const { from, to } = monthRange(month);
+    const today = now.toISOString().slice(0, 10);
+    const renewals = new Map<string, { id: string; merchant: string; amount: number; date: string }[]>();
+    if (to > today) {
+      for (const r of await this.recurring.active(address)) {
+        for (const date of expectedDates(r, from, to)) {
+          const list = renewals.get(r.category) ?? [];
+          list.push({ id: r.id, merchant: r.merchant, amount: r.amount, date });
+          renewals.set(r.category, list);
+        }
+      }
+    }
     const limits = await db.select().from(budgets).where(eq(budgets.userAddress, address));
     const spentRows = await db
       .select({ category: transactions.category, spent: sql<string>`coalesce(sum(-${transactions.amount}), 0)` })
@@ -37,12 +57,20 @@ export class BudgetsService {
 
     return {
       month,
-      budgets: limits.map((b) => ({
-        category: b.category,
-        label: CATEGORY_LABELS[b.category as CategoryId] ?? b.category,
-        limit: Number(b.limit),
-        spent: spent.get(b.category) ?? 0,
-      })),
+      budgets: limits.map((b) => {
+        const used = spent.get(b.category) ?? 0;
+        const due = (renewals.get(b.category) ?? []).sort((x, y) => x.date.localeCompare(y.date));
+        const committed = cents(due.reduce((sum, r) => sum + r.amount, 0));
+        return {
+          category: b.category,
+          label: CATEGORY_LABELS[b.category as CategoryId] ?? b.category,
+          limit: Number(b.limit),
+          spent: used,
+          committed,
+          projected: cents(used + committed),
+          renewals: due,
+        };
+      }),
     };
   }
 
@@ -96,5 +124,5 @@ export class BudgetsController {
   }
 }
 
-@Module({ controllers: [BudgetsController], providers: [BudgetsService], exports: [BudgetsService] })
+@Module({ imports: [RecurringModule], controllers: [BudgetsController], providers: [BudgetsService], exports: [BudgetsService] })
 export class BudgetsModule {}

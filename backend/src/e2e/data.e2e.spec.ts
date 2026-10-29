@@ -217,8 +217,10 @@ describe("user data routes", () => {
       const res = await client.get("/budgets?month=2026-09");
       assert.equal(res.body.month, "2026-09");
       const byCategory = Object.fromEntries(res.body.budgets.map((b: { category: string }) => [b.category, b]));
-      assert.deepEqual(byCategory.entertainment, { category: "entertainment", label: "Entertainment", limit: 100, spent: 17.99 });
-      assert.deepEqual(byCategory.shopping, { category: "shopping", label: "Shopping", limit: 120, spent: 42.5 });
+      // September has ended, so nothing is still committed.
+      const noRenewals = { committed: 0, renewals: [] };
+      assert.deepEqual(byCategory.entertainment, { category: "entertainment", label: "Entertainment", limit: 100, spent: 17.99, projected: 17.99, ...noRenewals });
+      assert.deepEqual(byCategory.shopping, { category: "shopping", label: "Shopping", limit: 120, spent: 42.5, projected: 42.5, ...noRenewals });
 
       const otherMonth = await client.get("/budgets?month=2026-10");
       assert.equal(otherMonth.body.budgets.find((b: { category: string }) => b.category === "shopping").spent, 0);

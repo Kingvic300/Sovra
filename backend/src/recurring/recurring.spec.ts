@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { detectRecurring } from "./recurring.module.js";
+import { detectRecurring, expectedDates, recurringId } from "./recurring.module.js";
 
 type Row = Parameters<typeof detectRecurring>[0][number];
 
@@ -74,5 +74,37 @@ describe("detectRecurring", () => {
   it("does not depend on input order", () => {
     const rows = [charge("2026-09-30", -17.99), charge("2026-07-30", -17.99), charge("2026-08-30", -17.99)];
     assert.equal(detectRecurring(rows)[0].lastDate, "2026-09-30");
+  });
+});
+
+describe("expectedDates", () => {
+  it("steps monthly charges by calendar month, clamping to the month's last day", () => {
+    assert.deepEqual(expectedDates({ nextDate: "2027-01-31", cadence: "monthly" }, "2027-01-01", "2027-05-01"), [
+      "2027-01-31",
+      "2027-02-28",
+      "2027-03-31",
+      "2027-04-30",
+    ]);
+  });
+
+  it("steps weekly charges by seven days and keeps only dates inside the window", () => {
+    assert.deepEqual(expectedDates({ nextDate: "2026-10-26", cadence: "weekly" }, "2026-11-01", "2026-11-17"), [
+      "2026-11-02",
+      "2026-11-09",
+      "2026-11-16",
+    ]);
+  });
+
+  it("returns nothing when the next charge falls after the window", () => {
+    assert.deepEqual(expectedDates({ nextDate: "2026-12-03", cadence: "monthly" }, "2026-11-01", "2026-12-01"), []);
+  });
+});
+
+describe("recurringId", () => {
+  it("is URL-safe and differs per merchant key", () => {
+    const ids = ["netflix", "spectranet internet", `sui:0x${"a".repeat(64)}`].map(recurringId);
+    for (const id of ids) assert.match(id, /^[A-Za-z0-9_-]+$/);
+    assert.equal(new Set(ids).size, 3);
+    assert.equal(recurringId("netflix"), recurringId("netflix"));
   });
 });
