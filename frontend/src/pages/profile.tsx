@@ -209,6 +209,14 @@ function LinkRow({ to, icon: Icon, title, body }: { to: string; icon: LucideIcon
   );
 }
 
+const SERVER_STATUS = {
+  idle: { text: "Not signed in", tone: "text-muted" },
+  checking: { text: "Checking…", tone: "text-muted" },
+  verified: { text: "Verified", tone: "text-gain" },
+  unavailable: { text: "Offline, this browser only", tone: "text-muted" },
+  failed: { text: "Couldn't verify. Log out and in again", tone: "text-over" },
+} as const;
+
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
@@ -268,6 +276,11 @@ export default function ProfilePage() {
               <Row label="Signed in with">{auth.session ? methodLabel(session) : "Not signed in"}</Row>
               <Row label="Email">{session.email ?? "None"}</Row>
               <Row label="Session">Kept in this browser until you log out</Row>
+              <Row label={session.method === "google" ? "Address ownership" : "Server session"}>
+                <span className={SERVER_STATUS[auth.server].tone}>
+                  {auth.server === "verified" && session.method === "google" ? "Verified by signature" : SERVER_STATUS[auth.server].text}
+                </span>
+              </Row>
             </dl>
             <p className="mt-4 rounded-xl bg-porcelain px-4 py-3 text-[14px] text-muted">
               {session.method === "google"

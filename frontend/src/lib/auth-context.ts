@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { CategoryId } from "@/lib/demo-data";
+import type { ServerSession } from "@/lib/server-session";
 
 export type SignInMethod = "google" | "demo";
 
@@ -26,6 +27,8 @@ export type AuthState = {
   session: Session | null;
   profile: Profile | null;
   zkLoginConfigured: boolean;
+  /** Whether the backend has verified this session (see server-session.ts). */
+  server: ServerSession;
   signInWithGoogle: () => Promise<void>;
   startDemo: () => void;
   signOut: () => Promise<void>;

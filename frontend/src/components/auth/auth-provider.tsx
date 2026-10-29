@@ -13,6 +13,7 @@ import {
   writeMockGoogleFlag,
   writeProfile,
 } from "@/lib/profile-store";
+import { endServerSession, ensureServerSession, type ServerSession } from "@/lib/server-session";
 
 const DEMO_ADDRESS = ACCOUNTS.find((a) => a.source === "tatum")!.address!;
 
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [claims, setClaims] = useState<Claims | null>(null);
   // Bumped after saving so the profile is re-read from storage.
   const [profileRevision, setProfileRevision] = useState(0);
+  const [server, setServer] = useState<{ address: string; status: ServerSession } | null>(null);
 
   const zkWallet = connection.isConnected && isEnokiWallet(connection.wallet) ? connection.wallet : null;
   const zkAddress = zkWallet && connection.account ? connection.account.address : null;
@@ -83,6 +85,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return demo ? DEMO_SESSION : null;
   }, [zkAddress, claims, demo, mockGoogle]);
 
+  // Wait for the Google claims so the backend gets the name and email with the sign-in.
+  const claimsReady = !zkAddress || claims?.address === zkAddress;
+  // The stand-in Google account has no key to sign with, so there is nothing to prove.
+  const isMock = session?.address === MOCK_GOOGLE_SESSION.address;
+
+  // Prove the session to the backend so its data routes trust this address.
+  useEffect(() => {
+    if (!session || !claimsReady || isMock) return;
+    let cancelled = false;
+    ensureServerSession(session, async (message) => (await dAppKit.signPersonalMessage({ message })).signature).then(
+      (status) => {
+        if (!cancelled) setServer({ address: session.address, status });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [session, claimsReady, isMock, dAppKit]);
+
+  const serverStatus: ServerSession = !session
+    ? "idle"
+    : isMock
+      ? "unavailable"
+      : server?.address === session.address
+        ? server.status
+        : "checking";
+
   const profile = useMemo(() => {
     void profileRevision;
     if (!session) return null;
@@ -110,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    endServerSession();
     if (zkWallet) await dAppKit.disconnectWallet();
     writeDemoFlag(false);
     setDemo(false);
@@ -130,8 +160,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     !session && (connection.isReconnecting || connection.isConnecting) ? "loading" : session ? "signed-in" : "signed-out";
 
   const value = useMemo<AuthState>(
-    () => ({ status, session, profile, zkLoginConfigured, signInWithGoogle, startDemo, signOut, saveProfile }),
-    [status, session, profile, signInWithGoogle, startDemo, signOut, saveProfile],
+    () => ({
+      status,
+      session,
+      profile,
+      zkLoginConfigured,
+      server: serverStatus,
+      signInWithGoogle,
+      startDemo,
+      signOut,
+      saveProfile,
+    }),
+    [status, session, profile, serverStatus, signInWithGoogle, startDemo, signOut, saveProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
