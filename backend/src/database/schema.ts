@@ -190,6 +190,35 @@ export const budgetSuggestionDecisions = pgTable(
   (t) => [primaryKey({ columns: [t.userAddress, t.suggestionId] }), index("budget_suggestion_decisions_category_idx").on(t.userAddress, t.category)],
 );
 
+/**
+ * In-app reminders: renewals coming up and budgets projected to go over. The unique key makes
+ * generation idempotent; `resolvedAt` is set when the reason goes away (a charge was paused, a
+ * budget is back under its limit), and `dismissedAt` when the user closes it.
+ */
+export const reminders = pgTable(
+  "reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userAddress: text("user_address")
+      .notNull()
+      .references(() => users.address, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["renewal", "budget_over"] }).notNull(),
+    /** The recurring charge id, or the budget category. */
+    ref: text("ref").notNull(),
+    /** The renewal date, or the first day of the budget's month. */
+    dueDate: date("due_date").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    tone: text("tone", { enum: ["over", "caution"] }).notNull(),
+    link: text("link").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("reminders_user_kind_ref_due_unique").on(t.userAddress, t.kind, t.ref, t.dueDate)],
+);
+
 /** Ask Sovra questions that got an answer, with the memories the answer used. */
 export const askMessages = pgTable(
   "ask_messages",
