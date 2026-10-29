@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Bell, ChevronRight, CircleAlert, CircleCheck, Repeat } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { budgetViews, useAppData } from "@/lib/app-data";
-import { CATEGORIES, TODAY } from "@/lib/demo-data";
+import { CATEGORIES } from "@/lib/demo-data";
 import { daysBetween, money, relativeDays } from "@/lib/format";
 import { useMediaQuery } from "@/lib/use-media-query";
 
@@ -100,11 +100,11 @@ export function NotificationsButton() {
         tone: "over" as const,
       })),
     ...data.recurring
-      .filter((r) => r.status === "active" && daysBetween(TODAY, r.next) <= 3)
+      .filter((r) => r.status === "active" && r.next >= data.today && daysBetween(data.today, r.next) <= 3)
       .map((r) => ({
         id: `renewal-${r.id}`,
         icon: Repeat,
-        title: `${r.merchant} renews ${relativeDays(daysBetween(TODAY, r.next))}`,
+        title: `${r.merchant} renews ${relativeDays(daysBetween(data.today, r.next))}`,
         body: `${money(r.amount)} from your ${CATEGORIES[r.category].toLowerCase()} budget.`,
         to: "/app/recurring",
         tone: "caution" as const,

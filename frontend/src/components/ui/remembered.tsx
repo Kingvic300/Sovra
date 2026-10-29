@@ -1,6 +1,6 @@
 /** Renders a memory sentence with its key phrase marked in highlighter. */
 export function Remembered({ text, highlight }: { text: string; highlight: string }) {
-  const at = text.indexOf(highlight);
+  const at = highlight ? text.indexOf(highlight) : -1;
   if (at === -1) return <>{text}</>;
   return (
     <>

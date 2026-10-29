@@ -16,17 +16,16 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "sign-in",
-    title: "Signing in with Google and zkLogin",
+    title: "Signing in with a Sui wallet",
     body: (
       <>
         <p>
-          Sovra uses zkLogin through Enoki, a service from Mysten Labs. When you sign in with Google, Google gives us a
-          signed token that includes your name and email address. Enoki combines that token with a salt it manages to
-          create a Sui address tied to your Google account.
+          You sign in by connecting a Sui wallet, such as Slush, and signing a one-time message. We check that signature to
+          confirm you control the wallet's address. Signing isn't a transaction and can't move money.
         </p>
         <p>
-          We receive your name, your email address and your Sui address. We never see your Google password, and there is
-          no seed phrase for us or anyone else to store.
+          We receive your Sui address and the name you give us during setup. We never see your wallet's keys or recovery
+          phrase.
         </p>
       </>
     ),
@@ -38,7 +37,7 @@ const SECTIONS: LegalSection[] = [
       <>
         <ul>
           <li>
-            <strong>Account details:</strong> your name, email address and Sui address from sign-in.
+            <strong>Account details:</strong> the name you give us and the Sui address you sign in with.
           </li>
           <li>
             <strong>Bank statements you upload:</strong> the dates, descriptions and amounts in the CSV files you choose
@@ -123,12 +122,6 @@ const SECTIONS: LegalSection[] = [
         <p>We share information only with the services that make Sovra work:</p>
         <ul>
           <li>
-            <strong>Google</strong>, to sign you in.
-          </li>
-          <li>
-            <strong>Mysten Labs (Enoki)</strong>, to create and manage your zkLogin Sui address.
-          </li>
-          <li>
             <strong>Walrus Memory and the Walrus network</strong>, to process and store your memories.
           </li>
           <li>
@@ -152,8 +145,8 @@ const SECTIONS: LegalSection[] = [
     title: "The demo account",
     body: (
       <p>
-        The demo account uses sample data stored only in your browser. It doesn't create a Google sign-in or a Sui
-        address. Clearing your browser data removes it.
+        The demo account uses sample data in a private account that only your browser can open. It isn't linked to
+        any wallet, and it is deleted automatically when it expires.
       </p>
     ),
   },
@@ -176,7 +169,7 @@ const SECTIONS: LegalSection[] = [
       <p>
         We use encrypted (HTTPS) connections, encrypt memories before they are stored on Walrus, and limit who can access stored
         data. No system is perfectly secure, so we can't guarantee that information will never be accessed without
-        permission. Keeping your Google account secure is the best way to protect your Sovra account.
+        permission. Keeping your wallet and its recovery phrase safe is the best way to protect your Sovra account.
       </p>
     ),
   },

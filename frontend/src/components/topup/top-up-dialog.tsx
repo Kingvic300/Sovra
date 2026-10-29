@@ -152,7 +152,7 @@ export function TopUpDialog({ open, onClose }: { open: boolean; onClose: () => v
             </div>
 
             <p className="mt-5 text-[13px] text-muted">
-              {session ? "Your Sui address" : "Demo wallet address. Sign in with Google to get your own."}
+              {session ? "Your Sui address" : "Demo wallet address. Connect your own Sui wallet to use it."}
             </p>
             <button
               type="button"

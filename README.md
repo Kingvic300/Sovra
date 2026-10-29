@@ -71,9 +71,9 @@ Goals, limits, corrections, decisions and preferences are stored as memories wit
 
 Sovra reads the user's USDC balance and transfers on Sui mainnet through Tatum's Sui gateway (`https://sui-mainnet.gateway.tatum.io/graphql`, `x-api-key` header). The top-up flow watches the same balance to confirm a deposit arrived. USDC is Circle's native coin type `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC`.
 
-### Sui zkLogin: no seed phrase
+### Sui wallet sign-in
 
-Users sign in with Google through [Enoki](https://docs.enoki.mystenlabs.com) zkLogin and get a Sui address tied to that Google account. To start a backend session, the frontend signs a one-time challenge with the zkLogin account, and the backend verifies it with `verifyPersonalMessageSignature`.
+Users connect any Sui wallet through `@mysten/dapp-kit-react`: browser extensions found through the Wallet Standard, or the Slush web wallet, which needs no install. To start a backend session, the wallet signs a one-time challenge and the backend verifies it with `verifyPersonalMessageSignature`. Sovra never asks the wallet to approve a transaction.
 
 ### Groq: answers and categorization
 
@@ -85,7 +85,7 @@ Ask Sovra and CSV categorization run on Groq's OpenAI-compatible API. By default
 flowchart LR
   subgraph Browser["Browser: frontend (Vite + React)"]
     UI["Marketing, onboarding, app screens"]
-    ZK["zkLogin via Enoki"]
+    ZK["Sui wallet (dapp-kit)"]
   end
 
   subgraph API["backend (NestJS, /api)"]
@@ -97,9 +97,8 @@ flowchart LR
   end
 
   UI -- "/api (cookie session)" --> API
-  ZK -- "Google OAuth popup" --> GOOGLE["Google"]
   ZK -- "signed challenge" --> AUTH
-  AUTH -- "verify zkLogin signature" --> SUI["Sui mainnet (GraphQL)"]
+  AUTH -- "verify wallet signature" --> SUI["Sui mainnet (GraphQL)"]
   WAL -- "x-api-key" --> TATUM["Tatum Sui gateway"]
   TATUM --> SUI
   MEM -- "remember / recall" --> WALRUS["Walrus Memory relayer"]
@@ -110,14 +109,14 @@ flowchart LR
   ASK --> DB
 ```
 
-Secrets (Tatum key, Walrus Memory delegate key, Groq key, session secret) live only on the backend. The browser only ever gets the public Enoki key and Google client ID.
+Secrets (Tatum key, Walrus Memory delegate key, Groq key, session secret) live only on the backend. The frontend needs no keys at all.
 
 ## Tech stack
 
 | Layer | Tools |
 |---|---|
 | Frontend | Vite 8, React 19, TypeScript, React Router, Tailwind CSS v4, lucide-react, qrcode.react, Hanken Grotesk |
-| Sui | `@mysten/dapp-kit-react`, `@mysten/enoki` (zkLogin), `@mysten/sui` |
+| Sui | `@mysten/dapp-kit-react` (wallet connect), `@mysten/sui` |
 | Backend | NestJS, TypeScript, zod, Drizzle ORM, Postgres (`postgres-js`), JWT session cookie |
 | Integrations | Walrus Memory (`@mysten-incubation/memwal`), Tatum Sui gateway, Groq |
 | Tooling | oxlint, tsc, drizzle-kit |
@@ -163,7 +162,7 @@ The frontend works on its own with demo data, so this is the quickest way to loo
 npm run dev:frontend          # http://localhost:5173
 ```
 
-Open http://localhost:5173 and choose **Continue with Google** or **Explore with a demo account**. Without zkLogin keys, Google sign-in is mocked and signs you in as a sample user.
+Open http://localhost:5173 and choose a wallet or **Explore with a demo account**. Without a backend, every screen shows the sample story and saves changes in your browser.
 
 ### Run the full stack
 
@@ -174,11 +173,10 @@ cp backend/.env.example backend/.env
 npm --prefix backend run db:migrate   # once DATABASE_URL is set
 npm run dev:backend                   # http://localhost:8787/api/health
 
-cp frontend/.env.example frontend/.env.local   # optional: real zkLogin
 npm run dev:frontend
 ```
 
-The Vite dev server proxies every `/api` request to the backend on port 8787.
+The Vite dev server proxies every `/api` request to the backend on port 8787. Once the backend has verified your session, every screen reads and saves through it.
 
 ### Scripts
 
@@ -192,14 +190,9 @@ The Vite dev server proxies every `/api` request to the backend on port 8787.
 
 ## Configuration
 
-### Frontend (`frontend/.env.local`)
+### Frontend
 
-| Variable | Purpose |
-|---|---|
-| `VITE_ENOKI_API_KEY` | Public Enoki API key for zkLogin. Safe in the browser |
-| `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID registered in Enoki. Add `http://localhost:5173/auth/callback` as a redirect URI |
-
-Without both, Google sign-in falls back to a mock account so the app stays usable.
+The frontend needs no environment variables. In production, `/api` must reach the backend on the same origin (a rewrite in `frontend/vercel.json`), because the session cookie is `SameSite=Lax`.
 
 ### Backend (`backend/.env`)
 
@@ -226,8 +219,7 @@ Any integration without its key answers `503 {"error":{"code":"not_configured"}}
 |---|---|
 | `/` | Home |
 | `/how-it-works`, `/security`, `/faq` | Marketing pages |
-| `/signin`, `/signup` | Google zkLogin or demo account |
-| `/auth/callback` | zkLogin popup return |
+| `/signin`, `/signup` | Sui wallet or demo account |
 | `/onboarding` | Four-step setup |
 | `/app` | Overview |
 | `/app/transactions`, `/app/budgets`, `/app/goals`, `/app/recurring` | Money screens |
@@ -276,9 +268,9 @@ Type is Hanken Grotesk throughout, with tabular figures for amounts. The logo is
 
 This is a hackathon build. What works today, and what is still being connected:
 
-- **Done:** every screen and flow in the frontend; the backend API with Tatum, Walrus Memory, Groq, CSV import, learned category rules, recurring detection and zkLogin signature checks; toasts, validation and error handling throughout.
-- **In progress:** the frontend still reads sample data and saves your changes in the browser. Next it will call the backend for sign-in sessions, memories, budgets and transactions.
-- **Mocked for now:** Google sign-in when zkLogin keys aren't configured.
+- **Done:** every screen and flow in the frontend; the backend API with Tatum, Walrus Memory, Groq, CSV import, learned category rules, recurring detection and wallet signature checks; toasts, validation and error handling throughout.
+- **Connected:** once the backend verifies the session, the app reads and saves accounts, transactions, budgets, goals, memories, recurring charges and Ask history through it. Without a reachable backend it falls back to the sample story stored in the browser.
+- **Browser only:** pausing a recurring charge and answered insights are kept per address in the browser; the backend has no routes for them yet.
 - **Not yet tested against live services:** Tatum, Walrus Memory and Groq calls with real keys, and the database routes against a real Postgres.
 
 ## Hackathon checklist

@@ -7,14 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { budgetTone } from "@/lib/budget-tone";
 import { Remembered } from "@/components/ui/remembered";
 import { Sparkline } from "@/components/ui/sparkline";
-import {
-  ACCOUNTS,
-  BALANCE_HISTORY,
-  CATEGORIES,
-  TODAY,
-  TRANSACTIONS,
-  totalBalance,
-} from "@/lib/demo-data";
+import { CATEGORIES } from "@/lib/demo-data";
 import { longDate, money, monthName, shortDate, splitMoney } from "@/lib/format";
 import { budgetViews, freeUntilPayday, useAppData } from "@/lib/app-data";
 import { firstName, useAuth } from "@/lib/auth-context";
@@ -23,8 +16,9 @@ import { useTitle } from "@/lib/use-title";
 export default function OverviewPage() {
   useTitle();
   const auth = useAuth();
-  const [whole, cents] = splitMoney(totalBalance());
   const { data } = useAppData();
+  const [whole, cents] = splitMoney(data.total ?? 0);
+  const free = freeUntilPayday(data);
   const recent = [...data.memories].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
   const goalMemory = data.memories.find((m) => m.kind === "goal");
   const budgets = budgetViews(data);
@@ -34,7 +28,7 @@ export default function OverviewPage() {
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[13px] text-muted">{longDate(TODAY)}</p>
+          <p className="text-[13px] text-muted">{longDate(data.today)}</p>
           <h1 className="text-[26px] font-bold tracking-[-0.02em]">{firstName(auth) ? `Hi, ${firstName(auth)}` : "Hi there"}</h1>
         </div>
         <Link
@@ -50,25 +44,31 @@ export default function OverviewPage() {
       <Panel className="!p-0">
         <div className="grid items-end gap-6 px-6 pt-6 pb-5 sm:px-7 md:grid-cols-2">
           <div>
-            <p className="text-muted">Across {ACCOUNTS.length} accounts</p>
+            <p className="text-muted">
+              Across {data.accounts.length} {data.accounts.length === 1 ? "account" : "accounts"}
+            </p>
             <p className="mt-1 text-[44px] leading-none font-extrabold tracking-[-0.03em] tabular-nums sm:text-[56px]">
               {whole}
               <span className="text-[0.5em] text-muted">{cents}</span>
             </p>
-            <p className="mt-2 font-medium text-gain">+{money(freeUntilPayday(data), { whole: true })} left this month after bills</p>
+            {free >= 0 ? (
+              <p className="mt-2 font-medium text-gain">+{money(free, { whole: true })} left this month after bills</p>
+            ) : (
+              <p className="mt-2 font-medium text-over">{money(-free, { whole: true })} short of bills before payday</p>
+            )}
           </div>
-          <Sparkline data={BALANCE_HISTORY} className="h-[72px] w-full text-cobalt" />
+          {data.balanceHistory.length > 1 && <Sparkline data={data.balanceHistory} className="h-[72px] w-full text-cobalt" />}
         </div>
         <ul className="grid border-t border-line sm:grid-cols-3">
-          {ACCOUNTS.map((a) => (
+          {data.accounts.map((a) => (
             <li key={a.id} className="border-line px-6 py-3.5 not-first:border-t sm:px-7 sm:not-first:border-t-0 sm:not-first:border-l">
               <p className="flex items-center gap-2 text-[13px] text-muted">
                 {a.name}
-                {a.source === "tatum" && (
+                {a.source === "tatum" && a.status === "live" && (
                   <span className="rounded-full bg-cobalt-soft px-2 py-px text-[11px] font-semibold text-cobalt">Live via Tatum</span>
                 )}
               </p>
-              <p className="font-semibold tabular-nums">{money(a.balance)}</p>
+              <p className="font-semibold tabular-nums">{a.balance === null ? <span className="text-muted">Not known</span> : money(a.balance)}</p>
             </li>
           ))}
         </ul>
@@ -101,7 +101,7 @@ export default function OverviewPage() {
 
         {/* Budgets */}
         <Panel
-          title={`${monthName(TODAY)} budgets`}
+          title={`${monthName(data.today)} budgets`}
           action={
             <Link to="/app/budgets" className="text-[13px] font-semibold text-cobalt hover:underline">
               All budgets
@@ -150,10 +150,19 @@ export default function OverviewPage() {
           }
         >
           <ul>
-            {TRANSACTIONS.slice(0, 5).map((tx) => (
+            {data.transactions.slice(0, 5).map((tx) => (
               <TransactionRow key={tx.id} tx={tx} />
             ))}
           </ul>
+          {data.transactions.length === 0 && (
+            <p className="text-muted">
+              No transactions yet.{" "}
+              <Link to="/app/accounts" className="font-semibold text-cobalt hover:underline">
+                Import a statement
+              </Link>{" "}
+              to see them here.
+            </p>
+          )}
         </Panel>
 
         {!goal ? (

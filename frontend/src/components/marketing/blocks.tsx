@@ -54,7 +54,7 @@ export function CtaBand() {
             Start with one goal. Sovra does the remembering.
           </h2>
           <p className="mt-3 max-w-[52ch] text-[17px] text-white/80">
-            Sign in with Google in one tap. No seed phrase, no bank password, nothing to install.
+            Connect a Sui wallet and sign once. No email, no bank password.
           </p>
         </div>
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">

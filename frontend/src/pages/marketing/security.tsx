@@ -6,11 +6,11 @@ import { useTitle } from "@/lib/use-title";
 const PILLARS = [
   {
     icon: KeyRound,
-    title: "Sign in without a seed phrase",
+    title: "Sign in with your own wallet",
     points: [
-      "Sovra uses Sui zkLogin through Enoki by Mysten Labs. Your Google sign-in proves who you are, and a zero-knowledge proof links it to your Sui address.",
-      "Sovra never sees your Google password.",
-      "Your address is tied to your Google account. Keep that account secure, because losing access to it can mean losing access to the address.",
+      "You sign in by connecting a Sui wallet and signing a one-time message. Sovra checks the signature to confirm the address is yours.",
+      "Sovra never sees your keys or recovery phrase, and never asks your wallet to approve a transaction.",
+      "Your keys stay in your wallet. Keep its recovery phrase safe, because Sovra can't recover a wallet for you.",
     ],
   },
   {

@@ -5,24 +5,23 @@ import { Chip, Field, MoneyInput } from "@/components/ui/form-controls";
 import { Modal } from "@/components/ui/modal";
 import { Remembered } from "@/components/ui/remembered";
 import { useAppData } from "@/lib/app-data";
-import { TODAY } from "@/lib/demo-data";
 import { daysBetween, money } from "@/lib/format";
 import { goalMemory, upcomingMonths } from "@/lib/onboarding";
 import { useToast } from "@/lib/toast-context";
 
 const IDEAS = ["A laptop", "Rent deposit", "Emergency fund", "Trip home", "New phone"];
-const MONTHS = upcomingMonths(36, new Date(`${TODAY}T00:00:00Z`));
 
 function AddGoalForm({ onDone }: { onDone: () => void }) {
-  const { addGoal, removeGoal, addMemory, removeMemory } = useAppData();
+  const { data, addGoal, removeGoal, addMemory, removeMemory } = useAppData();
+  const [months] = useState(() => upcomingMonths(36, new Date(`${data.today}T00:00:00Z`)));
   const toast = useToast();
   const [name, setName] = useState("");
   const [target, setTarget] = useState(0);
   const [saved, setSaved] = useState(0);
-  const [due, setDue] = useState(MONTHS[5].value);
+  const [due, setDue] = useState(months[5].value);
   const [errors, setErrors] = useState<{ name?: string; target?: string; saved?: string }>({});
 
-  const weeks = Math.max(1, Math.ceil(daysBetween(TODAY, due) / 7));
+  const weeks = Math.max(1, Math.ceil(daysBetween(data.today, due) / 7));
   const weekly = target > saved ? Math.ceil((target - saved) / weeks) : 0;
   const memory = goalMemory({ goal: { name, target, due } });
 
@@ -86,7 +85,7 @@ function AddGoalForm({ onDone }: { onDone: () => void }) {
 
         <Field label="By when?">
           <select className={fieldClass} value={due} onChange={(e) => setDue(e.target.value)}>
-            {MONTHS.map((m) => (
+            {months.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>

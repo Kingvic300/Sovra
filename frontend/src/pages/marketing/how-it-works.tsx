@@ -30,7 +30,7 @@ export default function HowItWorksPage() {
         <ol>
           <Step
             n={1}
-            title="Sign in with Google"
+            title="Connect your Sui wallet"
             visual={
               <div className="rounded-card bg-card p-6 shadow-card">
                 <div className="flex items-center gap-3">
@@ -38,17 +38,17 @@ export default function HowItWorksPage() {
                     <KeyRound className="size-5" aria-hidden />
                   </span>
                   <div>
-                    <p className="font-semibold">Your Sui address is ready</p>
+                    <p className="font-semibold">Wallet connected</p>
                     <p className="text-[14px] text-muted tabular-nums">0x7b3e…2f9a</p>
                   </div>
                 </div>
-                <p className="mt-4 text-[14px] text-muted">Created with zkLogin from your Google sign-in. No seed phrase.</p>
+                <p className="mt-4 text-[14px] text-muted">Signed one message to prove it's yours. Sovra can only read it.</p>
               </div>
             }
           >
             <p>
-              One tap with Google. Behind the scenes, Sui's zkLogin turns that sign-in into a Sui address that belongs
-              to you. There's no seed phrase to write down and no wallet extension to install.
+              Connect Slush or any Sui wallet and sign one message. That signature proves the address is yours, so
+              Sovra can read your USDC. It never asks for a transaction and can never move money.
             </p>
           </Step>
 

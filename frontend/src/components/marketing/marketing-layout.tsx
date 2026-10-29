@@ -202,7 +202,7 @@ export function MarketingFooter() {
         <div>
           <h2 className="text-[14px] font-semibold text-white/50">Built on</h2>
           <ul className="mt-3 flex flex-col gap-2 text-white/85">
-            <li>Sui zkLogin</li>
+            <li>Sui wallets</li>
             <li>Walrus Memory</li>
             <li>Tatum</li>
           </ul>

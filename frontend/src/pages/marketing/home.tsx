@@ -103,8 +103,8 @@ const FEATURES = [
 const STACK = [
   {
     icon: KeyRound,
-    name: "Sui zkLogin",
-    body: "Sign in with Google and get a Sui address. No seed phrase, no extension, no password to remember.",
+    name: "Sui wallet sign-in",
+    body: "Connect Slush or any Sui wallet. One signature proves the address is yours. No email, no password.",
   },
   {
     icon: ShieldCheck,
@@ -142,7 +142,7 @@ export default function HomePage() {
               ) : (
                 <>
                   <Link to="/signup" className={`${buttonClass()} h-12 px-6 text-[15px]`}>
-                    Get started with Google
+                    Connect a Sui wallet
                   </Link>
                   <Link to="/signin" className={`${buttonClass("secondary")} h-12 px-6 text-[15px]`}>
                     Try the demo
@@ -150,7 +150,7 @@ export default function HomePage() {
                 </>
               )}
             </div>
-            <p className="mt-5 text-[14px] text-muted">No seed phrase. No bank password. Sovra never moves your money.</p>
+            <p className="mt-5 text-[14px] text-muted">No bank password. One signature to sign in. Sovra never moves your money.</p>
           </div>
           <HeroVisual />
         </div>

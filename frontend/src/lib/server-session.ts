@@ -10,7 +10,8 @@ import type { Session } from "@/lib/auth-context";
  */
 export type ServerSession = "idle" | "checking" | "verified" | "unavailable" | "failed";
 
-type ServerUser = { address: string; method: Session["method"] };
+/** The backend still calls signed-in wallet users "google", from when sign-in used zkLogin. */
+type ServerUser = { address: string; method: "google" | "demo" };
 
 /** True when the error means there is no Sovra backend behind /api, rather than a refusal. */
 function isUnavailable(err: unknown) {
@@ -34,12 +35,12 @@ async function currentServerUser(): Promise<ServerUser | null> {
 function matches(user: ServerUser | null, session: Session) {
   if (!user) return false;
   if (session.method === "demo") return user.method === "demo";
-  return user.method === "google" && normalizeSuiAddress(user.address) === normalizeSuiAddress(session.address);
+  return user.method !== "demo" && normalizeSuiAddress(user.address) === normalizeSuiAddress(session.address);
 }
 
 /**
- * Makes sure the backend has a session for `session`. Google users prove they own the
- * zkLogin address by signing a one-time challenge; the demo account needs no proof.
+ * Makes sure the backend has a session for `session`. Wallet users prove they own the
+ * address by signing a one-time challenge; the demo account needs no proof.
  */
 export async function ensureServerSession(
   session: Session,

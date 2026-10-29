@@ -2,7 +2,11 @@ import { useState, type FormEvent } from "react";
 import { ArrowUp } from "lucide-react";
 import { Logo } from "@/components/shell/logo";
 import { Remembered } from "@/components/ui/remembered";
-import { memoryById, type ChatMessage } from "@/lib/demo-data";
+import { api, ApiError } from "@/lib/api";
+import { useAppData } from "@/lib/app-data";
+import { toChat, type ApiAskMessage } from "@/lib/backend";
+import type { ChatMessage } from "@/lib/demo-data";
+import { highlightFor } from "@/lib/highlight";
 import { useToast } from "@/lib/toast-context";
 
 const SUGGESTIONS = [
@@ -14,23 +18,42 @@ const SUGGESTIONS = [
 export function ChatThread({ initial }: { initial: ChatMessage[] }) {
   const [messages, setMessages] = useState(initial);
   const [draft, setDraft] = useState("");
+  const [thinking, setThinking] = useState(false);
   const toast = useToast();
+  const { data, reload } = useAppData();
 
-  function send(text: string) {
+  async function send(text: string) {
     const question = text.trim();
-    if (!question) return;
-    // The assistant is not wired yet; questions are queued in the thread.
-    setMessages((prev) => [...prev, { id: `u${prev.length}`, role: "user", text: question }]);
+    if (!question || thinking) return;
+    const asked: ChatMessage = { id: `pending-${messages.length}`, role: "user", text: question };
+    setMessages((prev) => [...prev, asked]);
     setDraft("");
-    toast.info({
-      title: "Ask Sovra isn't connected yet",
-      description: "Your question stays in the thread. Answers start once the AI provider is switched on.",
-    });
+    if (data.source !== "live") {
+      toast.info({
+        title: "Sign in to ask Sovra",
+        description: "Answers use your own numbers and memories, so they need a signed-in account.",
+      });
+      return;
+    }
+    setThinking(true);
+    try {
+      const res = await api<Omit<ApiAskMessage, "question">>("/ask", { method: "POST", json: { question } });
+      // Swap the pending question for the saved pair, so ids match the history.
+      setMessages((prev) => [...prev.filter((m) => m.id !== asked.id), ...toChat({ ...res, question }, prev.length)]);
+      // Recall bumps each memory's use count.
+      void reload();
+    } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== asked.id));
+      setDraft(question);
+      toast.error({ title: "Sovra couldn't answer", description: e instanceof ApiError ? e.message : "Try again in a moment." });
+    } finally {
+      setThinking(false);
+    }
   }
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    send(draft);
+    void send(draft);
   }
 
   return (
@@ -52,20 +75,28 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
                   <div className="mt-3 rounded-lg bg-porcelain px-3.5 py-2.5 text-[13px]">
                     <p className="mb-1 font-semibold text-muted">Based on what you told Sovra</p>
                     <ul className="flex flex-col gap-1">
-                      {m.usedMemories.map((id) => {
-                        const mem = memoryById(id);
-                        return mem ? (
-                          <li key={id}>
-                            <Remembered text={mem.text} highlight={mem.highlight} />
-                          </li>
-                        ) : null;
-                      })}
+                      {m.usedMemories.map((mem, i) => (
+                        <li key={mem.id ?? i}>
+                          <Remembered text={mem.text} highlight={highlightFor(mem.text)} />
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 )}
               </div>
             </li>
           ),
+        )}
+        {thinking && (
+          <li className="flex gap-3 text-muted">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-cobalt-soft">
+              <Logo className="size-4 animate-pulse text-cobalt motion-reduce:animate-none" />
+            </span>
+            <p className="pt-1">Checking your numbers and what Sovra remembers…</p>
+          </li>
+        )}
+        {messages.length === 0 && !thinking && (
+          <li className="text-muted">Ask about a purchase, a bill or a goal. Sovra answers from your own numbers.</li>
         )}
       </ol>
 
@@ -75,7 +106,8 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
             <button
               key={s}
               type="button"
-              onClick={() => send(s)}
+              onClick={() => void send(s)}
+              disabled={thinking}
               className="rounded-full border border-line bg-card px-3 py-1.5 text-[13px] text-muted transition-colors hover:border-cobalt/40 hover:text-ink"
             >
               {s}
@@ -97,7 +129,7 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
           <button
             type="submit"
             aria-label="Send"
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || thinking}
             className="grid size-9 place-items-center rounded-full bg-cobalt text-white transition-colors hover:bg-cobalt-deep disabled:opacity-40"
           >
             <ArrowUp className="size-4" aria-hidden />

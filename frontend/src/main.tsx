@@ -12,7 +12,6 @@ import { dAppKit } from '@/lib/dapp-kit'
 import AccountsPage from '@/pages/accounts'
 import AskPage from '@/pages/ask'
 import AuthPage from '@/pages/auth'
-import AuthCallbackPage from '@/pages/auth-callback'
 import BudgetsPage from '@/pages/budgets'
 import GoalsPage from '@/pages/goals'
 import FaqPage from '@/pages/marketing/faq'
@@ -48,7 +47,6 @@ const router = createBrowserRouter([
       // Auth and legal
       { path: 'signin', element: <AuthPage mode="signin" /> },
       { path: 'signup', element: <AuthPage mode="signup" /> },
-      { path: 'auth/callback', element: <AuthCallbackPage /> },
       { path: 'terms', element: <TermsPage /> },
       { path: 'privacy', element: <PrivacyPage /> },
       // Signed in

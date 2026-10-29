@@ -1,18 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useDAppKit, useWalletConnection, useWallets } from "@mysten/dapp-kit-react";
-import { getSession, isEnokiWallet, isGoogleWallet } from "@mysten/enoki";
+import { useDAppKit, useWalletConnection, type UiWallet } from "@mysten/dapp-kit-react";
+import { api } from "@/lib/api";
 import { AuthContext, type AuthState, type Profile, type Session } from "@/lib/auth-context";
-import { zkLoginConfigured } from "@/lib/dapp-kit";
 import { ACCOUNTS, USER_NAME } from "@/lib/demo-data";
-import {
-  claimsFromJwt,
-  readDemoFlag,
-  readMockGoogleFlag,
-  readProfile,
-  writeDemoFlag,
-  writeMockGoogleFlag,
-  writeProfile,
-} from "@/lib/profile-store";
+import { readDemoFlag, readProfile, writeDemoFlag, writeProfile } from "@/lib/profile-store";
 import { endServerSession, ensureServerSession, type ServerSession } from "@/lib/server-session";
 
 const DEMO_ADDRESS = ACCOUNTS.find((a) => a.source === "tatum")!.address!;
@@ -24,17 +15,6 @@ const DEMO_SESSION: Session = {
   email: "ada@example.com",
 };
 
-/**
- * Stand-in for a Google zkLogin account while VITE_ENOKI_API_KEY and
- * VITE_GOOGLE_CLIENT_ID aren't set. Remove once real zkLogin is configured.
- */
-const MOCK_GOOGLE_SESSION: Session = {
-  method: "google",
-  address: "0x5c2fa94e81d7b36c0e4a29f1d8b75c6e3a0f94d2b18e7c56a3d09f4e2b71c8a6",
-  name: "Ada Okafor",
-  email: "ada.okafor@gmail.com",
-};
-
 const DEMO_PROFILE: Profile = {
   name: USER_NAME,
   onboarded: true,
@@ -44,94 +24,59 @@ const DEMO_PROFILE: Profile = {
   sources: { csv: true, sui: true },
 };
 
-type Claims = { address: string; name?: string; email?: string };
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const dAppKit = useDAppKit();
   const connection = useWalletConnection();
-  const wallets = useWallets();
   const [demo, setDemo] = useState(readDemoFlag);
-  const [mockGoogle, setMockGoogle] = useState(readMockGoogleFlag);
-  const [claims, setClaims] = useState<Claims | null>(null);
   // Bumped after saving so the profile is re-read from storage.
   const [profileRevision, setProfileRevision] = useState(0);
   const [server, setServer] = useState<{ address: string; status: ServerSession } | null>(null);
 
-  const zkWallet = connection.isConnected && isEnokiWallet(connection.wallet) ? connection.wallet : null;
-  const zkAddress = zkWallet && connection.account ? connection.account.address : null;
-
-  // Pull the Google name and email out of the zkLogin session for greetings.
-  useEffect(() => {
-    if (!zkWallet || !zkAddress) return;
-    let cancelled = false;
-    getSession(zkWallet)
-      .then((s) => {
-        if (!cancelled) setClaims({ address: zkAddress, ...(s?.jwt ? claimsFromJwt(s.jwt) : {}) });
-      })
-      .catch(() => {
-        if (!cancelled) setClaims({ address: zkAddress });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [zkWallet, zkAddress]);
+  const walletAddress = connection.isConnected && connection.account ? connection.account.address : null;
 
   const session: Session | null = useMemo(() => {
-    if (zkAddress) {
-      const c = claims?.address === zkAddress ? claims : null;
-      return { method: "google", address: zkAddress, name: c?.name ?? "", email: c?.email };
-    }
-    if (mockGoogle) return MOCK_GOOGLE_SESSION;
+    if (walletAddress) return { method: "wallet", address: walletAddress, name: "" };
     return demo ? DEMO_SESSION : null;
-  }, [zkAddress, claims, demo, mockGoogle]);
-
-  // Wait for the Google claims so the backend gets the name and email with the sign-in.
-  const claimsReady = !zkAddress || claims?.address === zkAddress;
-  // The stand-in Google account has no key to sign with, so there is nothing to prove.
-  const isMock = session?.address === MOCK_GOOGLE_SESSION.address;
+  }, [walletAddress, demo]);
 
   // Prove the session to the backend so its data routes trust this address.
   useEffect(() => {
-    if (!session || !claimsReady || isMock) return;
+    if (!session) return;
     let cancelled = false;
     ensureServerSession(session, async (message) => (await dAppKit.signPersonalMessage({ message })).signature).then(
-      (status) => {
+      async (status) => {
+        // The saved profile lives on the backend; keep the browser copy in step with it.
+        if (status === "verified") {
+          const me = await api<{ profile: Profile | null }>("/me").catch(() => null);
+          if (!cancelled && me?.profile) {
+            writeProfile(session.address, me.profile);
+            setProfileRevision((n) => n + 1);
+          }
+        }
         if (!cancelled) setServer({ address: session.address, status });
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [session, claimsReady, isMock, dAppKit]);
+  }, [session, dAppKit]);
 
-  const serverStatus: ServerSession = !session
-    ? "idle"
-    : isMock
-      ? "unavailable"
-      : server?.address === session.address
-        ? server.status
-        : "checking";
+  const serverStatus: ServerSession = !session ? "idle" : server?.address === session.address ? server.status : "checking";
 
   const profile = useMemo(() => {
     void profileRevision;
     if (!session) return null;
-    if (session.address === MOCK_GOOGLE_SESSION.address) return readProfile(session.address) ?? DEMO_PROFILE;
     return readProfile(session.address) ?? (session.method === "demo" ? DEMO_PROFILE : null);
   }, [session, profileRevision]);
 
-  const signInWithGoogle = useCallback(async () => {
-    const google = wallets.find((w) => isGoogleWallet(w));
-    writeDemoFlag(false);
-    setDemo(false);
-    if (!zkLoginConfigured || !google) {
-      // Mock: behave like a successful Google sign-in.
-      await new Promise((r) => setTimeout(r, 700));
-      writeMockGoogleFlag(true);
-      setMockGoogle(true);
-      return;
-    }
-    await dAppKit.connectWallet({ wallet: google });
-  }, [dAppKit, wallets]);
+  const signInWithWallet = useCallback(
+    async (wallet: UiWallet) => {
+      writeDemoFlag(false);
+      setDemo(false);
+      await dAppKit.connectWallet({ wallet });
+    },
+    [dAppKit],
+  );
 
   const startDemo = useCallback(() => {
     writeDemoFlag(true);
@@ -140,38 +85,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     endServerSession();
-    if (zkWallet) await dAppKit.disconnectWallet();
+    if (connection.isConnected) await dAppKit.disconnectWallet();
     writeDemoFlag(false);
     setDemo(false);
-    writeMockGoogleFlag(false);
-    setMockGoogle(false);
-  }, [dAppKit, zkWallet]);
+  }, [dAppKit, connection.isConnected]);
 
   const saveProfile = useCallback(
-    (next: Profile) => {
+    async (next: Profile) => {
       if (!session) return;
       writeProfile(session.address, next);
       setProfileRevision((n) => n + 1);
+      // The backend also turns a new goal, limit or payday into goal and budget rows and memories.
+      if (serverStatus === "verified") await api("/me/profile", { method: "PUT", json: next });
     },
-    [session],
+    [session, serverStatus],
   );
 
   const status: AuthState["status"] =
     !session && (connection.isReconnecting || connection.isConnecting) ? "loading" : session ? "signed-in" : "signed-out";
 
   const value = useMemo<AuthState>(
-    () => ({
-      status,
-      session,
-      profile,
-      zkLoginConfigured,
-      server: serverStatus,
-      signInWithGoogle,
-      startDemo,
-      signOut,
-      saveProfile,
-    }),
-    [status, session, profile, serverStatus, signInWithGoogle, startDemo, signOut, saveProfile],
+    () => ({ status, session, profile, server: serverStatus, signInWithWallet, startDemo, signOut, saveProfile }),
+    [status, session, profile, serverStatus, signInWithWallet, startDemo, signOut, saveProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

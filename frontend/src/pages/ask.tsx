@@ -3,14 +3,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
 import { Remembered } from "@/components/ui/remembered";
 import { useAppData } from "@/lib/app-data";
-import { CHAT, TODAY } from "@/lib/demo-data";
 import { daysBetween, money, shortDate } from "@/lib/format";
 import { useTitle } from "@/lib/use-title";
 
 export default function AskPage() {
   useTitle("Ask Sovra");
   const { data } = useAppData();
-  const upcoming = data.recurring.filter((r) => r.status === "active" && daysBetween(TODAY, r.next) <= 7);
+  const upcoming = data.recurring.filter((r) => r.status === "active" && r.next >= data.today && daysBetween(data.today, r.next) <= 7);
 
   return (
     <div className="flex flex-col gap-6">
@@ -19,7 +18,8 @@ export default function AskPage() {
         description="Ask anything about your money. Answers use your real numbers and what Sovra remembers about your goals."
       />
       <div className="grid items-start gap-5 xl:grid-cols-[1fr_360px]">
-        <ChatThread initial={CHAT} />
+        {/* Keyed so the thread starts again from the saved history once live data arrives. */}
+        <ChatThread key={data.source} initial={data.chat} />
 
         <aside className="flex flex-col gap-5" aria-label="What Sovra uses to answer">
           <Panel title="Sovra keeps in mind">

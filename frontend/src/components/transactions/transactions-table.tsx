@@ -3,8 +3,9 @@ import { Search, Upload, X } from "lucide-react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { buttonClass } from "@/components/ui/button-class";
+import { ApiError } from "@/lib/api";
 import { useAppData } from "@/lib/app-data";
-import { ACCOUNTS, CATEGORIES, type CategoryId, type Transaction } from "@/lib/demo-data";
+import { CATEGORIES, type CategoryId, type Transaction } from "@/lib/demo-data";
 import { money, shortDate, signedMoney } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
@@ -35,16 +36,17 @@ function FilterPill({ active, count, onClick, children }: { active: boolean; cou
   );
 }
 
-export function TransactionsTable({ initial }: { initial: Transaction[] }) {
-  const [rows, setRows] = useState(initial);
+export function TransactionsTable() {
+  const { data, recategorize, rememberCategory } = useAppData();
+  const rows = data.transactions;
+  const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CategoryId | "all">("all");
   const [pending, setPending] = useState<Pending | null>(null);
   const toast = useToast();
-  const { addMemory } = useAppData();
   const searchId = useId();
 
-  const accountName = (id: string) => ACCOUNTS.find((a) => a.id === id)?.name ?? "";
+  const accountName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? "";
 
   const q = query.trim().toLowerCase();
   const matching = useMemo(() => rows.filter((t) => t.merchant.toLowerCase().includes(q)), [rows, q]);
@@ -65,29 +67,30 @@ export function TransactionsTable({ initial }: { initial: Transaction[] }) {
   );
 
   function changeCategory(tx: Transaction, category: CategoryId) {
-    setRows((prev) => prev.map((t) => (t.id === tx.id ? { ...t, category, learnedFrom: undefined } : t)));
+    recategorize(tx.id, category);
     setPending({ txId: tx.id, merchant: tx.merchant, category });
   }
 
-  function rememberForMerchant() {
+  async function rememberForMerchant() {
     if (!pending) return;
-    setRows((prev) =>
-      prev.map((t) =>
-        t.merchant === pending.merchant ? { ...t, category: pending.category, learnedFrom: "new" } : t,
-      ),
-    );
-    const category = CATEGORIES[pending.category].toLowerCase();
-    addMemory({
-      kind: "correction",
-      text: `${pending.merchant} transactions are ${category}.`,
-      highlight: category,
-      source: "You edited a transaction",
-    });
-    toast.success({
-      title: "Saved to memory",
-      description: `${pending.merchant} is always ${CATEGORIES[pending.category].toLowerCase()} from now on.`,
-    });
-    setPending(null);
+    const label = CATEGORIES[pending.category].toLowerCase();
+    setSaving(true);
+    try {
+      const outcome = await rememberCategory(pending.txId, pending.merchant, pending.category);
+      if (outcome === "saved") {
+        toast.success({ title: "Saved to memory", description: `${pending.merchant} is always ${label} from now on.` });
+      } else {
+        toast.info({
+          title: `${pending.merchant} is always ${label} now`,
+          description: "The rule is saved, but Walrus Memory didn't take the note. Sovra still applies it to new imports.",
+        });
+      }
+      setPending(null);
+    } catch (e) {
+      toast.error({ title: "Couldn't save the rule", description: e instanceof ApiError ? e.message : "Try again in a moment." });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -165,8 +168,8 @@ export function TransactionsTable({ initial }: { initial: Transaction[] }) {
             <mark className="remembered">{CATEGORIES[pending.category].toLowerCase()}</mark>?
           </p>
           <div className="flex gap-2">
-            <Button size="sm" onClick={rememberForMerchant}>
-              Remember this
+            <Button size="sm" onClick={rememberForMerchant} disabled={saving}>
+              {saving ? "Saving" : "Remember this"}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => setPending(null)}>
               Just this once
@@ -257,10 +260,21 @@ export function TransactionsTable({ initial }: { initial: Transaction[] }) {
         </table>
         {visible.length === 0 && (
           <div className="px-5 py-10 text-center">
-            <p className="text-muted">No transactions match.</p>
-            <button type="button" onClick={clearFilters} className="mt-2 font-semibold text-cobalt hover:underline">
-              Clear filters
-            </button>
+            {rows.length === 0 ? (
+              <>
+                <p className="text-muted">No transactions yet.</p>
+                <Link to="/app/accounts" className="mt-2 inline-block font-semibold text-cobalt hover:underline">
+                  Import a statement
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-muted">No transactions match.</p>
+                <button type="button" onClick={clearFilters} className="mt-2 font-semibold text-cobalt hover:underline">
+                  Clear filters
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

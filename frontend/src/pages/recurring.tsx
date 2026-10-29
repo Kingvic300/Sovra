@@ -2,7 +2,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
 import { RecurringRow } from "@/components/recurring/recurring-row";
 import { useAppData } from "@/lib/app-data";
-import { TODAY } from "@/lib/demo-data";
 import { daysBetween, money } from "@/lib/format";
 import { useTitle } from "@/lib/use-title";
 
@@ -11,8 +10,8 @@ export default function RecurringPage() {
   const { data } = useAppData();
   const active = data.recurring.filter((r) => r.status === "active").sort((a, b) => a.next.localeCompare(b.next));
   const paused = data.recurring.filter((r) => r.status === "paused");
-  const thisWeek = active.filter((r) => daysBetween(TODAY, r.next) <= 7);
-  const later = active.filter((r) => daysBetween(TODAY, r.next) > 7);
+  const thisWeek = active.filter((r) => daysBetween(data.today, r.next) <= 7);
+  const later = active.filter((r) => daysBetween(data.today, r.next) > 7);
   const monthly = active.reduce((s, r) => s + r.amount, 0);
   const weekTotal = thisWeek.reduce((s, r) => s + r.amount, 0);
   const savedByPausing = paused.reduce((s, r) => s + r.amount, 0);

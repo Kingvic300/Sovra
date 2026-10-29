@@ -42,21 +42,21 @@ const SECTIONS: LegalSection[] = [
   },
   {
     id: "accounts",
-    title: "Your account and zkLogin",
+    title: "Your account and wallet",
     body: (
       <>
         <p>
-          You sign in with your Google account through zkLogin, provided by Enoki from Mysten Labs. zkLogin creates a Sui
-          address that is tied to your Google account. There's no seed phrase and Sovra never sees your Google password.
+          You sign in by connecting a Sui wallet and signing a one-time message that proves you control its address.
+          Sovra never sees your wallet's keys or recovery phrase and never asks it to approve a transaction.
         </p>
         <p>
-          <strong>Keep your Google account secure.</strong> Anyone who can sign in to your Google account can sign in to
-          Sovra as you. If you lose access to your Google account, you may also lose access to the Sui address created
-          for it, and to any funds held there. Sovra can't recover a Google account or that address for you.
+          <strong>Keep your wallet secure.</strong> Anyone who controls your wallet can sign in to Sovra as you. If you
+          lose access to your wallet, you may also lose access to any funds held there. Sovra can't recover a wallet for
+          you.
         </p>
         <p>
-          The demo account uses sample data that is stored only in your browser. Anything you change in the demo may be
-          lost when you clear your browser data.
+          The demo account uses sample data in a temporary account. Anything you change in the demo is deleted when it
+          expires.
         </p>
       </>
     ),
@@ -139,8 +139,8 @@ const SECTIONS: LegalSection[] = [
     title: "Services we rely on",
     body: (
       <p>
-        Sovra works with services run by other companies and networks, including Google for sign-in, Enoki by Mysten Labs
-        for zkLogin, Walrus Memory and the Walrus network for storing memories, Tatum for reading the Sui blockchain, and an
+        Sovra works with services run by other companies and networks, including the Sui wallet you sign in with, Walrus
+        Memory and the Walrus network for storing memories, Tatum for reading the Sui blockchain, and an
         AI model provider. Their own terms apply to their services, and we aren't responsible for outages or changes on
         their side.
       </p>
@@ -175,8 +175,8 @@ const SECTIONS: LegalSection[] = [
       <>
         <p>
           To the extent the law allows, Sovra isn't liable for indirect or consequential losses, or for financial
-          decisions you make based on information in the app. This includes losses from lost access to your Google
-          account or Sui address, and from transfers you send to the wrong address or network.
+          decisions you make based on information in the app. This includes losses from lost access to your wallet or Sui
+          address, and from transfers you send to the wrong address or network.
         </p>
         <p>Nothing in these terms limits any liability that can't be limited by law.</p>
       </>
@@ -224,7 +224,7 @@ export default function TermsPage() {
             Sovra <mark className="remembered">only reads</mark> your money. It never holds, moves or invests it.
           </li>
           <li>Answers are general information, not financial advice. AI can be wrong, so check before you act.</li>
-          <li>You sign in with Google. If you lose that Google account, you may lose the Sui address tied to it.</li>
+          <li>You sign in with a Sui wallet. Sovra can't recover it if you lose access.</li>
           <li>Sovra is in early access, so features may change.</li>
         </ul>
       }

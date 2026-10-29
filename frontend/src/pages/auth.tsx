@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useWallets, type UiWallet } from "@mysten/dapp-kit-react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { Highlighter, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { Logo, Wordmark } from "@/components/shell/logo";
@@ -8,19 +9,8 @@ import { useAuth } from "@/lib/auth-context";
 import { ROUTE_GUARDS_ENABLED } from "@/lib/config";
 import { useTitle } from "@/lib/use-title";
 
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 48 48" className="size-5" aria-hidden="true">
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.5z" />
-      <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
-      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.5z" />
-    </svg>
-  );
-}
-
 const FACTS = [
-  { icon: KeyRound, title: "No seed phrase", body: "zkLogin turns your Google sign-in into a Sui address. Nothing to write down or lose." },
+  { icon: KeyRound, title: "Your wallet, your keys", body: "Sign in with any Sui wallet. Sovra asks for one signature to prove the address is yours." },
   { icon: ShieldCheck, title: "Read only", body: "Sovra reads balances and statements. It can never move your money." },
   { icon: Highlighter, title: "Memory you own", body: "Goals and decisions are stored encrypted on Walrus. Forget any of them at any time." },
 ];
@@ -29,7 +19,8 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [busy, setBusy] = useState<"google" | "demo" | null>(null);
+  const wallets = useWallets();
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   useTitle(mode === "signin" ? "Sign in" : "Create your account");
 
@@ -38,21 +29,19 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
     return <Navigate to={auth.profile?.onboarded ? from || "/app" : "/onboarding"} replace />;
   }
 
-  async function google() {
+  async function connect(wallet: UiWallet) {
     setError(null);
-    setBusy("google");
+    setBusy(wallet.name);
     try {
-      await auth.signInWithGoogle();
+      await auth.signInWithWallet(wallet);
       // The guard on /app sends new users to onboarding.
       navigate("/app", { replace: true });
     } catch (e) {
-      const message = e instanceof Error ? e.message : "";
+      const message = e instanceof Error ? e.message.toLowerCase() : "";
       setError(
-        message === "not_configured"
-          ? "Google sign-in isn't set up on this deployment yet. Use the demo account to look around."
-          : message.toLowerCase().includes("closed")
-            ? "The Google window was closed before sign-in finished. Try again."
-            : "Google sign-in didn't complete. Try again, or use the demo account.",
+        message.includes("reject") || message.includes("closed") || message.includes("cancel")
+          ? `${wallet.name} didn't connect. Approve the request in your wallet to continue.`
+          : `Couldn't connect ${wallet.name}. Try again, or use the demo account.`,
       );
     } finally {
       setBusy(null);
@@ -82,20 +71,39 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
             </h1>
             <p className="mt-2 text-[16px] text-muted">
               {signin
-                ? "Sign in with Google. Sovra picks up exactly where you left off."
-                : "One tap with Google. Sovra sets up a private Sui address for you, no seed phrase needed."}
+                ? "Connect your Sui wallet. Sovra picks up exactly where you left off."
+                : "Connect a Sui wallet. No email, no password. Slush works in the browser with nothing to install."}
             </p>
 
             <div className="mt-8 rounded-card bg-card p-5 shadow-card">
-              <button
-                type="button"
-                onClick={google}
-                disabled={busy !== null}
-                className="flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-line bg-card font-semibold transition-colors hover:border-ink/30 hover:bg-porcelain disabled:opacity-60"
-              >
-                {busy === "google" ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <GoogleIcon />}
-                {busy === "google" ? "Waiting for Google" : "Continue with Google"}
-              </button>
+              <ul className="flex flex-col gap-2">
+                {wallets.map((w) => (
+                  <li key={w.name}>
+                    <button
+                      type="button"
+                      onClick={() => void connect(w)}
+                      disabled={busy !== null}
+                      className="flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-line bg-card font-semibold transition-colors hover:border-ink/30 hover:bg-porcelain disabled:opacity-60"
+                    >
+                      {busy === w.name ? (
+                        <Loader2 className="size-5 animate-spin" aria-hidden />
+                      ) : (
+                        <img src={w.icon} alt="" className="size-5 rounded" />
+                      )}
+                      {busy === w.name ? `Waiting for ${w.name}` : `Continue with ${w.name}`}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {wallets.length === 0 && (
+                <p className="text-[14px] text-muted">
+                  No Sui wallet found. Install{" "}
+                  <a href="https://slush.app" target="_blank" rel="noreferrer" className="font-semibold text-cobalt hover:underline">
+                    Slush
+                  </a>{" "}
+                  and reload this page.
+                </p>
+              )}
 
               {error && (
                 <p role="alert" className="mt-3 rounded-lg bg-over-soft px-3.5 py-2.5 text-[14px] text-over">
@@ -124,7 +132,7 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
             <Button variant="secondary" className="h-12 w-full" onClick={demo} disabled={busy !== null}>
               Explore with a demo account
             </Button>
-            <p className="mt-2 text-center text-[13px] text-muted">Sample data, stored only in this browser.</p>
+            <p className="mt-2 text-center text-[13px] text-muted">Sample data in a private demo account.</p>
 
             <p className="mt-8 text-center text-[14px] text-muted">
               {signin ? "New to Sovra? " : "Already have an account? "}

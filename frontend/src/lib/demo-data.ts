@@ -19,7 +19,8 @@ export type CategoryId =
   | "bills"
   | "health"
   | "income"
-  | "transfer";
+  | "transfer"
+  | "uncategorized";
 
 export const CATEGORIES: Record<CategoryId, string> = {
   food: "Food and groceries",
@@ -31,16 +32,23 @@ export const CATEGORIES: Record<CategoryId, string> = {
   health: "Health",
   income: "Income",
   transfer: "Rent share",
+  uncategorized: "Uncategorized",
 };
+
+/** How the backend read the Sui wallet. Sample data is always "live". */
+export type WalletStatus = "live" | "not_configured" | "unavailable" | "skipped_demo";
 
 export type Account = {
   id: string;
   name: string;
   detail: string;
-  balance: number;
+  /** Null when the balance isn't known (a CSV without a balance column, or a wallet that couldn't be read). */
+  balance: number | null;
   source: "csv" | "tatum";
   address?: string;
+  /** ISO date, empty when never read. */
   syncedAt: string;
+  status?: WalletStatus;
 };
 
 export const ACCOUNTS: Account[] = [
@@ -213,12 +221,14 @@ export type Recurring = {
   next: string;
   category: CategoryId;
   status: "active" | "paused";
+  /** Status the month's figures already count. Differs from `status` once the user pauses or resumes. */
+  baseStatus?: "active" | "paused";
   note?: string;
   /** Note is a warning rather than something Sovra remembered. */
   warn?: boolean;
 };
 
-export const RECURRING: Recurring[] = [
+export const RECURRING: Recurring[] = ([
   { id: "r1", merchant: "Netflix", amount: 17.99, next: "2026-10-30", category: "entertainment", status: "active", note: "Takes entertainment over your $100 limit", warn: true },
   { id: "r2", merchant: "Spotify", amount: 10.99, next: "2026-10-30", category: "entertainment", status: "active", note: "You chose to keep this in October" },
   { id: "r3", merchant: "Rent share to Tunde", amount: 225, next: "2026-11-01", category: "transfer", status: "active" },
@@ -227,7 +237,7 @@ export const RECURRING: Recurring[] = [
   { id: "r6", merchant: "ChatGPT Plus", amount: 20, next: "2026-11-12", category: "business", status: "active" },
   { id: "r7", merchant: "iCloud+", amount: 2.99, next: "2026-11-15", category: "bills", status: "active" },
   { id: "r8", merchant: "Disney+", amount: 13.99, next: "2026-11-12", category: "entertainment", status: "paused", note: "Paused on 12 Oct" },
-];
+] satisfies Recurring[]).map((r) => ({ ...r, baseStatus: r.status }));
 
 /** Daily total balance for the last 30 days, oldest first. */
 export const BALANCE_HISTORY = [
@@ -241,8 +251,8 @@ export type ChatMessage = {
   id: string;
   role: "user" | "sovra";
   text: string;
-  /** Memory ids the answer relied on. */
-  usedMemories?: string[];
+  /** Memories the answer relied on. */
+  usedMemories?: { id: string | null; text: string }[];
 };
 
 export const CHAT: ChatMessage[] = [
@@ -251,16 +261,8 @@ export const CHAT: ChatMessage[] = [
     id: "c2",
     role: "sovra",
     text: "Not without slowing the laptop fund. After rent on 1 November and your renewals, you have about $612 free until you're paid on the 25th. A $300 phone leaves $312, and the laptop target slips to late February. If the phone can wait until after the 25th, both fit.",
-    usedMemories: ["m1", "m4"],
+    usedMemories: [MEMORIES[0], MEMORIES[3]].map(({ id, text }) => ({ id, text })),
   },
 ];
-
-export function memoryById(id: string) {
-  return MEMORIES.find((m) => m.id === id);
-}
-
-export function totalBalance() {
-  return ACCOUNTS.reduce((sum, a) => sum + a.balance, 0);
-}
 
 export const PAYDAY = "2026-11-25";

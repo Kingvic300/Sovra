@@ -4,8 +4,6 @@ import { budgetViews, useAppData } from "@/lib/app-data";
 import { money } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
-const INSIGHT_ID = "entertainment-over-2026-10";
-const NETFLIX_ID = "r1";
 const NETFLIX_ACCOUNT_URL = "https://www.netflix.com/account";
 
 /**
@@ -17,8 +15,10 @@ export function EntertainmentInsight() {
   const { data, setRecurringStatus, addMemory, removeMemory, markAnswered } = useAppData();
   const toast = useToast();
   const ent = budgetViews(data).find((b) => b.category === "entertainment");
-  const netflix = data.recurring.find((r) => r.id === NETFLIX_ID);
+  const netflix = data.recurring.find((r) => /netflix/i.test(r.merchant));
   if (!ent || !netflix) return null;
+  const INSIGHT_ID = `entertainment-over-${data.today.slice(0, 7)}`;
+  const NETFLIX_ID = netflix.id;
 
   const pausedByUser = netflix.status === "paused";
   const kept = data.answered.includes(INSIGHT_ID);

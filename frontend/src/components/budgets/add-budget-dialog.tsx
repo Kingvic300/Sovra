@@ -4,12 +4,14 @@ import { Chip, Field, MoneyInput } from "@/components/ui/form-controls";
 import { Modal } from "@/components/ui/modal";
 import { Remembered } from "@/components/ui/remembered";
 import { spentThisMonth, useAppData } from "@/lib/app-data";
-import { CATEGORIES, TODAY, type CategoryId } from "@/lib/demo-data";
+import { CATEGORIES, type CategoryId } from "@/lib/demo-data";
 import { money, monthName } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 /** Categories that can have a spending limit. */
-const BUDGETABLE = (Object.keys(CATEGORIES) as CategoryId[]).filter((c) => c !== "income" && c !== "transfer");
+const BUDGETABLE = (Object.keys(CATEGORIES) as CategoryId[]).filter(
+  (c) => c !== "income" && c !== "transfer" && c !== "uncategorized",
+);
 const QUICK_AMOUNTS = [50, 100, 200, 300];
 
 function AddBudgetForm({ onDone }: { onDone: () => void }) {
@@ -21,7 +23,7 @@ function AddBudgetForm({ onDone }: { onDone: () => void }) {
   const [limit, setLimit] = useState(0);
   const [error, setError] = useState<{ category?: string; limit?: string }>({});
 
-  const spent = category ? spentThisMonth(category) : 0;
+  const spent = category ? spentThisMonth(data, category) : 0;
   const preview =
     category && limit > 0
       ? {
@@ -46,7 +48,7 @@ function AddBudgetForm({ onDone }: { onDone: () => void }) {
       description:
         spent > limit
           ? `You've already spent ${money(spent, { whole: true })} this month, so it starts over the limit.`
-          : `${money(limit - spent, { whole: true })} left for ${monthName(TODAY)}. Saved to memory.`,
+          : `${money(limit - spent, { whole: true })} left for ${monthName(data.today)}. Saved to memory.`,
     });
     onDone();
   }
@@ -82,7 +84,7 @@ function AddBudgetForm({ onDone }: { onDone: () => void }) {
             category && (
               <p className="mt-2 text-[13px] text-muted">
                 You've spent <span className="font-semibold text-ink">{money(spent)}</span> on{" "}
-                {CATEGORIES[category].toLowerCase()} so far in {monthName(TODAY)}.
+                {CATEGORIES[category].toLowerCase()} so far in {monthName(data.today)}.
               </p>
             )
           )}

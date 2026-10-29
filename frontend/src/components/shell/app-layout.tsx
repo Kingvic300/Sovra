@@ -26,7 +26,14 @@ export function AppLayout() {
             <Topbar stats={stats} />
             {/* Full width beside the sidebar; pages widen their grids instead of centering. */}
             <main id="main" tabIndex={-1} className="min-w-0 flex-1 px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] sm:px-6 lg:px-10 lg:py-8 2xl:px-12">
-              <Outlet />
+              {data.source === "loading" ? (
+                <p role="status" className="flex items-center gap-3 py-16 text-muted">
+                  <span className="size-4 animate-spin rounded-full border-2 border-cobalt border-t-transparent motion-reduce:animate-none" aria-hidden />
+                  Loading your money…
+                </p>
+              ) : (
+                <Outlet />
+              )}
             </main>
           </div>
           <TabBar stats={stats} />

@@ -4,14 +4,16 @@ import { RefreshBalanceButton } from "@/components/accounts/refresh-balance-butt
 import { TopUpButton } from "@/components/topup/top-up-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
-import { ACCOUNTS, TRANSACTIONS } from "@/lib/demo-data";
+import { useAppData, walletAccount } from "@/lib/app-data";
 import { money, shortAddress, shortDate } from "@/lib/format";
 import { useTitle } from "@/lib/use-title";
 
 export default function AccountsPage() {
   useTitle("Accounts");
-  const wallet = ACCOUNTS.find((a) => a.source === "tatum");
-  const csvAccounts = ACCOUNTS.filter((a) => a.source === "csv");
+  const { data } = useAppData();
+  const wallet = walletAccount(data);
+  const csvAccounts = data.accounts.filter((a) => a.source === "csv");
+  const month = data.today.slice(0, 7);
 
   return (
     <div className="flex flex-col gap-6">
@@ -30,14 +32,20 @@ export default function AccountsPage() {
               </span>
             }
             action={
-              <span className="rounded-full bg-cobalt-soft px-2.5 py-0.5 text-[12px] font-semibold text-cobalt">
-                Live via Tatum
-              </span>
+              wallet.status === "live" && (
+                <span className="rounded-full bg-cobalt-soft px-2.5 py-0.5 text-[12px] font-semibold text-cobalt">
+                  Live via Tatum
+                </span>
+              )
             }
           >
-            <p className="text-[40px] leading-none font-extrabold tracking-[-0.03em] tabular-nums">
-              {money(wallet.balance)} <span className="text-lg font-bold text-muted">USDC</span>
-            </p>
+            {wallet.balance === null ? (
+              <p className="text-[17px] text-muted">{wallet.detail}.</p>
+            ) : (
+              <p className="text-[40px] leading-none font-extrabold tracking-[-0.03em] tabular-nums">
+                {money(wallet.balance)} <span className="text-lg font-bold text-muted">USDC</span>
+              </p>
+            )}
             <dl className="mt-5 grid grid-cols-[120px_1fr] gap-y-2 text-[14px]">
               <dt className="text-muted">Address</dt>
               <dd className="font-medium tabular-nums" title={wallet.address}>
@@ -49,13 +57,14 @@ export default function AccountsPage() {
               <dd className="font-medium">Tatum Sui RPC gateway</dd>
               <dt className="text-muted">Transactions</dt>
               <dd className="font-medium">
-                {TRANSACTIONS.filter((t) => t.accountId === wallet.id).length} this month, matched by sender and amount
+                {data.transactions.filter((t) => t.accountId === wallet.id && t.date.startsWith(month)).length} this month,
+                matched by sender and amount
               </dd>
             </dl>
             <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-line pt-4">
               <TopUpButton />
               <RefreshBalanceButton />
-              <span className="text-[13px] text-muted">Last read {shortDate(wallet.syncedAt)}</span>
+              {wallet.syncedAt && <span className="text-[13px] text-muted">Last read {shortDate(wallet.syncedAt)}</span>}
             </div>
           </Panel>
         )}
@@ -70,12 +79,15 @@ export default function AccountsPage() {
                   </span>
                   <div>
                     <p className="font-semibold">{a.name}</p>
-                    <p className="text-[13px] text-muted">Imported {shortDate(a.syncedAt)}</p>
+                    {a.syncedAt && <p className="text-[13px] text-muted">Imported {shortDate(a.syncedAt)}</p>}
                   </div>
                 </div>
-                <p className="font-semibold tabular-nums">{money(a.balance)}</p>
+                <p className="font-semibold tabular-nums">
+                  {a.balance === null ? <span className="font-normal text-muted">Balance not known</span> : money(a.balance)}
+                </p>
               </li>
             ))}
+            {csvAccounts.length === 0 && <li className="pb-1 text-muted">No statements imported yet.</li>}
           </ul>
           <div className="mt-4">
             <CsvDrop />

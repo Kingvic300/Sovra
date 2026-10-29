@@ -21,15 +21,15 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: "Do I need to know anything about crypto?",
-    a: "No. You sign in with Google and Sovra handles the rest. The Sui address is there if you want to hold USDC, and you can ignore it if you don't.",
+    a: "A little. You sign in with a Sui wallet. Slush runs in the browser with nothing to install, and you can ignore USDC if you don't hold any.",
   },
   {
-    q: "What is zkLogin?",
-    a: "A Sui feature that turns a normal sign-in, like Google, into a blockchain address. A zero-knowledge proof links the two, so there's no seed phrase and Sovra never sees your Google password.",
+    q: "Why does Sovra ask me to sign a message?",
+    a: "Signing proves you own the wallet address, the way a password would. It isn't a transaction: it costs nothing and can't move money.",
   },
   {
-    q: "What happens if I lose access to my Google account?",
-    a: "Your Sui address is tied to that Google account, so you could lose access to it. Keep your Google account secure, with two-step verification turned on.",
+    q: "What happens if I lose access to my wallet?",
+    a: "Sovra can't recover a wallet. Restore it in your wallet app with its recovery phrase, then connect again and your memories are still there.",
   },
   {
     q: "What does Sovra remember?",

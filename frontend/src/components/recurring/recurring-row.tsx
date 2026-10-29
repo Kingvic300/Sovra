@@ -1,16 +1,17 @@
 import { Pause, Play } from "lucide-react";
 import { useAppData } from "@/lib/app-data";
-import { CATEGORIES, RECURRING, TODAY, type Recurring } from "@/lib/demo-data";
+import { CATEGORIES, type Recurring } from "@/lib/demo-data";
 import { daysBetween, money, relativeDays, shortDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 export function RecurringRow({ r }: { r: Recurring }) {
-  const { setRecurringStatus, addMemory, removeMemory } = useAppData();
+  const { data, setRecurringStatus, addMemory, removeMemory } = useAppData();
+  const today = data.today;
   const toast = useToast();
-  const days = daysBetween(TODAY, r.next);
+  const days = daysBetween(today, r.next);
   const paused = r.status === "paused";
   const soon = !paused && days <= 3;
-  const changedByUser = RECURRING.find((x) => x.id === r.id)?.status !== r.status;
+  const changedByUser = r.baseStatus !== undefined && r.baseStatus !== r.status;
   const note = changedByUser ? (paused ? "You paused this today" : "You resumed this today") : r.note;
 
   function toggle() {
@@ -20,13 +21,13 @@ export function RecurringRow({ r }: { r: Recurring }) {
       next === "paused"
         ? {
             kind: "decision",
-            text: `You paused ${r.merchant} on ${shortDate(TODAY)}.`,
+            text: `You paused ${r.merchant} on ${shortDate(today)}.`,
             highlight: `paused ${r.merchant}`,
             source: "You chose on Recurring",
           }
         : {
             kind: "decision",
-            text: `You resumed ${r.merchant} on ${shortDate(TODAY)}.`,
+            text: `You resumed ${r.merchant} on ${shortDate(today)}.`,
             highlight: `resumed ${r.merchant}`,
             source: "You chose on Recurring",
           },

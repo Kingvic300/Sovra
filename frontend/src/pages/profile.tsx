@@ -19,6 +19,7 @@ import { Field } from "@/components/ui/form-controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
 import { Remembered } from "@/components/ui/remembered";
+import { ApiError } from "@/lib/api";
 import { memoryCount, useAppData } from "@/lib/app-data";
 import { useAuth, type Profile, type Session } from "@/lib/auth-context";
 import { shortAddress } from "@/lib/format";
@@ -32,7 +33,7 @@ const SOURCES = [
 ] as const;
 
 function methodLabel(session: Session) {
-  return session.method === "google" ? "Google, through Sui zkLogin" : "Demo account";
+  return session.method === "wallet" ? "Sui wallet" : "Demo account";
 }
 
 function IdentityCard({ session, name }: { session: Session; name: string }) {
@@ -60,7 +61,7 @@ function IdentityCard({ session, name }: { session: Session; name: string }) {
         </span>
         <div className="min-w-0">
           <p className="truncate text-[22px] leading-tight font-bold tracking-[-0.01em]">{name}</p>
-          <p className="truncate text-white/70">{session.email ?? (session.method === "demo" ? "Sample data in this browser" : "Signed in with Google")}</p>
+          <p className="truncate text-white/70">{session.email ?? (session.method === "demo" ? "Sample data" : "Signed in with a Sui wallet")}</p>
           <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[12px] font-semibold">
             <ShieldCheck className="size-3.5" aria-hidden />
             {methodLabel(session)}
@@ -86,7 +87,7 @@ function IdentityCard({ session, name }: { session: Session; name: string }) {
 
 function DetailsForm({ base, canSave }: { base: Profile; canSave: boolean }) {
   const { saveProfile } = useAuth();
-  const { addMemory } = useAppData();
+  const { data, addMemory, reload } = useAppData();
   const toast = useToast();
   const [name, setName] = useState(base.name);
   const [payday, setPayday] = useState(base.payday);
@@ -101,13 +102,20 @@ function DetailsForm({ base, canSave }: { base: Profile; canSave: boolean }) {
     setSources(base.sources);
   }
 
-  function save(e: FormEvent) {
+  async function save(e: FormEvent) {
     e.preventDefault();
     if (!dirty || !name.trim()) return;
     const next: Profile = { ...base, name: name.trim(), payday, sources };
-    saveProfile(next);
     const memory = payday !== base.payday ? paydayMemory(next) : null;
-    if (memory) addMemory({ kind: "preference", ...memory, source: "You updated your profile" });
+    try {
+      await saveProfile(next);
+    } catch (err) {
+      toast.error({ title: "Couldn't save your profile", description: err instanceof ApiError ? err.message : "Try again in a moment." });
+      return;
+    }
+    // The backend remembers a new payday itself.
+    if (data.source === "live") void reload();
+    else if (memory) addMemory({ kind: "preference", ...memory, source: "You updated your profile" });
     toast.success({
       title: "Profile saved",
       description: memory ? `Sovra will remember ${memory.highlight === "irregular" ? "your income is irregular" : `you're ${memory.highlight}`}.` : undefined,
@@ -274,18 +282,17 @@ export default function ProfilePage() {
           <Panel title="Sign-in">
             <dl className="divide-y divide-line">
               <Row label="Signed in with">{auth.session ? methodLabel(session) : "Not signed in"}</Row>
-              <Row label="Email">{session.email ?? "None"}</Row>
               <Row label="Session">Kept in this browser until you log out</Row>
-              <Row label={session.method === "google" ? "Address ownership" : "Server session"}>
+              <Row label={session.method === "wallet" ? "Address ownership" : "Server session"}>
                 <span className={SERVER_STATUS[auth.server].tone}>
-                  {auth.server === "verified" && session.method === "google" ? "Verified by signature" : SERVER_STATUS[auth.server].text}
+                  {auth.server === "verified" && session.method === "wallet" ? "Verified by signature" : SERVER_STATUS[auth.server].text}
                 </span>
               </Row>
             </dl>
             <p className="mt-4 rounded-xl bg-porcelain px-4 py-3 text-[14px] text-muted">
-              {session.method === "google"
-                ? "Sovra never sees your Google password. A zero-knowledge proof links your sign-in to your Sui address."
-                : "The demo account uses sample data stored only in this browser. Clearing your browser data removes it."}
+              {session.method === "wallet"
+                ? "Your wallet signed a one-time message to prove the address is yours. Sovra never sees your keys and can't move money."
+                : "The demo account uses sample data. It's private to you and is deleted when it expires."}
             </p>
           </Panel>
 

@@ -2,18 +2,21 @@ import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
+import { useAppData } from "@/lib/app-data";
 import { money } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 /** Re-reads the Sui wallet's USDC balance through the backend (Tatum). */
 export function RefreshBalanceButton() {
   const toast = useToast();
+  const { reload } = useAppData();
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
     setBusy(true);
     try {
       const { amount, usdc } = await api<{ amount?: number; usdc: string }>("/wallet/balance");
+      await reload();
       toast.success({ title: "Balance updated", description: `${money(amount ?? Number(usdc))} USDC on Sui.` });
     } catch (e) {
       toast.error({

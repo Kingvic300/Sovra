@@ -38,7 +38,7 @@ export function ProfileMenu() {
     );
   }
   const name = profile?.name || session.name || "You";
-  const detail = session.method === "demo" ? "Demo account" : session.email || "Signed in with Google";
+  const detail = session.method === "demo" ? "Demo account" : session.email || "Sui wallet";
 
   async function copyAddress() {
     await navigator.clipboard.writeText(session!.address);

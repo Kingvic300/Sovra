@@ -1,7 +1,9 @@
 import { createContext, useContext } from "react";
 import {
   ACCOUNTS,
+  BALANCE_HISTORY,
   BUDGETS,
+  CHAT,
   GOALS,
   MEMORIES,
   MEMORY_COUNT,
@@ -10,37 +12,84 @@ import {
   RECURRING,
   TODAY,
   TRANSACTIONS,
+  type Account,
   type Budget,
   type CategoryId,
+  type ChatMessage,
   type Goal,
   type Memory,
   type MemoryKind,
   type Recurring,
+  type Transaction,
 } from "@/lib/demo-data";
 import { daysBetween, longDate } from "@/lib/format";
 
-/** Everything the user can change from the UI. Persisted in the browser until the backend is wired. */
+/**
+ * - "sample": no backend session, so the app shows the demo story and saves changes in the browser.
+ * - "loading": the backend session is being checked or the user's data is loading.
+ * - "live": everything comes from, and is saved to, the backend.
+ */
+export type DataSource = "sample" | "loading" | "live";
+
 export type AppData = {
+  source: DataSource;
+  /** ISO dates every screen measures from. Fixed for the sample story, the real date when live. */
+  today: string;
+  monthEnd: string;
+  payday: string;
   budgets: Budget[];
   goals: Goal[];
   recurring: Recurring[];
   memories: Memory[];
+  /** Memories stored on Walrus but not in the list (sample data only). */
+  hiddenMemories: number;
+  transactions: Transaction[];
+  accounts: Account[];
+  /** Known balances plus the wallet. Null when no balance is known. */
+  total: number | null;
+  /** Daily total for the last 30 days, oldest first. */
+  balanceHistory: number[];
+  /** Money left until payday, as counted with each renewal at its `baseStatus`. */
+  monthNet: number;
+  chat: ChatMessage[];
   /** Insights the user already answered, so they aren't asked again. */
   answered: string[];
 };
 
-export const INITIAL_DATA: AppData = {
+/** Last day of the month that `iso` falls in. */
+export function monthEndOf(iso: string) {
+  const [y, m] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
+export const SAMPLE_DATA: AppData = {
+  source: "sample",
+  today: TODAY,
+  monthEnd: monthEndOf(TODAY),
+  payday: PAYDAY,
   budgets: BUDGETS,
   goals: GOALS,
   recurring: RECURRING,
   memories: MEMORIES,
+  hiddenMemories: MEMORY_COUNT - MEMORIES.length,
+  transactions: TRANSACTIONS,
+  accounts: ACCOUNTS,
+  total: ACCOUNTS.reduce((sum, a) => sum + (a.balance ?? 0), 0),
+  balanceHistory: BALANCE_HISTORY,
+  monthNet: MONTH_NET,
+  chat: CHAT,
   answered: [],
 };
+
+/** Whether a memory the server writes for an action was stored. "skipped" means Walrus Memory isn't set up. */
+export type MemoryOutcome = "saved" | "skipped" | "failed";
 
 export type NewMemory = { kind: MemoryKind; text: string; highlight: string; source: string };
 
 export type AppDataApi = {
   data: AppData;
+  /** Re-reads everything from the backend without showing the loading state. No-op for sample data. */
+  reload: () => Promise<void>;
   addMemory: (m: NewMemory) => string;
   removeMemory: (id: string) => void;
   restoreMemory: (m: Memory, index: number) => void;
@@ -48,6 +97,10 @@ export type AppDataApi = {
   upsertBudget: (b: Budget) => void;
   addGoal: (g: Omit<Goal, "id">) => string;
   removeGoal: (id: string) => void;
+  /** Changes one transaction's category. */
+  recategorize: (txId: string, category: CategoryId) => void;
+  /** Files every transaction from this merchant under `category` from now on, and remembers it. */
+  rememberCategory: (txId: string, merchant: string, category: CategoryId) => Promise<MemoryOutcome>;
   markAnswered: (insightId: string, answered: boolean) => void;
   reset: () => void;
 };
@@ -60,12 +113,10 @@ export function useAppData() {
   return api;
 }
 
-export const MONTH_END = "2026-10-31";
-
 /** Renewals in a category that are still due before the month ends. */
-export function committedFor(category: CategoryId, recurring: Recurring[]) {
-  const due = recurring.filter(
-    (r) => r.status === "active" && r.category === category && r.next >= TODAY && r.next <= MONTH_END,
+export function committedFor(category: CategoryId, data: Pick<AppData, "recurring" | "today" | "monthEnd">) {
+  const due = data.recurring.filter(
+    (r) => r.status === "active" && r.category === category && r.next >= data.today && r.next <= data.monthEnd,
   );
   const amount = due.reduce((s, r) => s + r.amount, 0);
   if (!due.length) return { amount: 0, label: null as string | null, names: "", when: "", items: due };
@@ -88,7 +139,7 @@ export type BudgetView = Budget & {
 
 export function budgetViews(data: AppData): BudgetView[] {
   return data.budgets.map((b) => {
-    const c = committedFor(b.category, data.recurring);
+    const c = committedFor(b.category, data);
     const projected = b.spent + c.amount;
     return {
       ...b,
@@ -103,46 +154,64 @@ export function budgetViews(data: AppData): BudgetView[] {
 }
 
 /** What the user has spent in a category this month, from imported transactions. */
-export function spentThisMonth(category: CategoryId) {
-  const month = TODAY.slice(0, 7);
-  return TRANSACTIONS.filter((t) => t.category === category && t.amount < 0 && t.date.startsWith(month)).reduce(
-    (s, t) => s + -t.amount,
-    0,
-  );
+export function spentThisMonth(data: AppData, category: CategoryId) {
+  const month = data.today.slice(0, 7);
+  return data.transactions
+    .filter((t) => t.category === category && t.amount < 0 && t.date.startsWith(month))
+    .reduce((s, t) => s + -t.amount, 0);
 }
-
-/** Older memories that exist on Walrus but aren't in the demo list. */
-const OLDER_MEMORIES = MEMORY_COUNT - MEMORIES.length;
 
 export function memoryCount(data: AppData) {
-  return OLDER_MEMORIES + data.memories.length;
+  return data.hiddenMemories + data.memories.length;
 }
 
-/**
- * Money free until payday. Starts from the demo figure and adjusts for
- * renewals the user paused or resumed that would land before payday.
- */
+/** Money free until payday: `monthNet`, adjusted for renewals the user paused or resumed before payday. */
 export function freeUntilPayday(data: AppData) {
-  let free = MONTH_NET;
+  let free = data.monthNet;
   for (const r of data.recurring) {
-    const initial = RECURRING.find((x) => x.id === r.id);
-    if (!initial || initial.status === r.status || r.next > PAYDAY) continue;
+    if (!r.baseStatus || r.baseStatus === r.status || r.next < data.today || r.next > data.payday) continue;
     free += r.status === "paused" ? r.amount : -r.amount;
   }
   return free;
 }
 
+/** Next date the user is paid, from the profile's day of the month. Month end when irregular or unknown. */
+export function nextPayday(today: string, payday: number | "irregular" | undefined) {
+  if (typeof payday !== "number") return monthEndOf(today);
+  const [y, m, d] = today.split("-").map(Number);
+  const on = (year: number, month: number) => {
+    const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return new Date(Date.UTC(year, month - 1, Math.min(payday, last))).toISOString().slice(0, 10);
+  };
+  return d < payday ? on(y, m) : on(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1);
+}
+
+/** Live `monthNet`: this month's income minus spending, minus active renewals due before payday. */
+export function liveMonthNet(data: Pick<AppData, "transactions" | "recurring" | "today" | "payday">) {
+  const month = data.today.slice(0, 7);
+  const net = data.transactions.filter((t) => t.date.startsWith(month)).reduce((s, t) => s + t.amount, 0);
+  const due = data.recurring
+    .filter((r) => r.status === "active" && r.next >= data.today && r.next <= data.payday)
+    .reduce((s, r) => s + r.amount, 0);
+  return net - due;
+}
+
+export function walletAccount(data: AppData) {
+  return data.accounts.find((a) => a.source === "tatum");
+}
+
 export function shellStats(data: AppData) {
-  const wallet = ACCOUNTS.find((a) => a.source === "tatum");
+  const wallet = walletAccount(data);
+  const month = data.today.slice(0, 7);
   return {
-    transactions: TRANSACTIONS.length,
+    transactions: data.transactions.filter((t) => t.date.startsWith(month)).length,
     budgetsOver: budgetViews(data).filter((b) => b.over).length,
-    dueSoon: data.recurring.filter((r) => r.status === "active" && daysBetween(TODAY, r.next) <= 3).length,
+    dueSoon: data.recurring.filter((r) => r.status === "active" && daysBetween(data.today, r.next) <= 3).length,
     memories: memoryCount(data),
     freeUntilPayday: freeUntilPayday(data),
-    daysToPayday: daysBetween(TODAY, PAYDAY),
-    walletSyncedToday: wallet?.syncedAt === TODAY,
-    walletBalance: wallet?.balance ?? 0,
+    daysToPayday: daysBetween(data.today, data.payday),
+    walletSyncedToday: wallet?.syncedAt === data.today,
+    walletBalance: wallet?.balance ?? null,
   };
 }
 

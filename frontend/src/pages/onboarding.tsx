@@ -9,6 +9,7 @@ import { fieldClass } from "@/components/ui/field-class";
 import { Chip, Field, MoneyInput } from "@/components/ui/form-controls";
 import { Remembered } from "@/components/ui/remembered";
 import { spentThisMonth, useAppData } from "@/lib/app-data";
+import { ApiError } from "@/lib/api";
 import { firstName, useAuth, type Profile } from "@/lib/auth-context";
 import { ROUTE_GUARDS_ENABLED } from "@/lib/config";
 import { CATEGORIES, DEMO_WALLET_ADDRESS, type CategoryId } from "@/lib/demo-data";
@@ -67,7 +68,7 @@ function OnboardingFlow() {
   const auth = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const { addMemory, upsertBudget } = useAppData();
+  const { data, addMemory, upsertBudget, reload } = useAppData();
   // Without route guards someone can arrive here signed out; fall back to the demo wallet.
   const session = auth.session ?? { method: "demo" as const, address: DEMO_WALLET_ADDRESS, name: "" };
   const [step, setStep] = useState(0);
@@ -99,7 +100,7 @@ function OnboardingFlow() {
     setDraft((d) => ({ ...d, ...patch }));
   }
 
-  function finish(profile: Profile) {
+  async function finish(profile: Profile) {
     const clean: Profile = {
       ...profile,
       name: profile.name.trim(),
@@ -107,17 +108,18 @@ function OnboardingFlow() {
       limit: profile.limit && profile.limit.amount > 0 ? profile.limit : undefined,
       onboarded: true,
     };
-    auth.saveProfile(clean);
-    const facts = [
-      { kind: "goal" as const, memory: goalMemory(clean) },
-      { kind: "preference" as const, memory: paydayMemory(clean) },
-      { kind: "limit" as const, memory: limitMemory(clean) },
-    ];
-    for (const { kind, memory } of facts) {
-      if (memory) addMemory({ kind, ...memory, source: "You told Sovra during setup" });
-    }
-    if (clean.limit) {
-      upsertBudget({ category: clean.limit.category, limit: clean.limit.amount, spent: spentThisMonth(clean.limit.category) });
+    if (data.source === "live") {
+      // The backend writes the goal, budget and memories itself when the profile is saved.
+      try {
+        await auth.saveProfile(clean);
+      } catch (e) {
+        toast.error({ title: "Couldn't save your setup", description: e instanceof ApiError ? e.message : "Try again in a moment." });
+        return;
+      }
+      await reload();
+    } else {
+      void auth.saveProfile(clean);
+      rememberLocally(clean);
     }
     const saved = memoriesFromProfile(clean).length;
     toast.success({
@@ -129,10 +131,24 @@ function OnboardingFlow() {
     navigate("/app", { replace: true });
   }
 
+  function rememberLocally(clean: Profile) {
+    const facts = [
+      { kind: "goal" as const, memory: goalMemory(clean) },
+      { kind: "preference" as const, memory: paydayMemory(clean) },
+      { kind: "limit" as const, memory: limitMemory(clean) },
+    ];
+    for (const { kind, memory } of facts) {
+      if (memory) addMemory({ kind, ...memory, source: "You told Sovra during setup" });
+    }
+    if (clean.limit) {
+      upsertBudget({ category: clean.limit.category, limit: clean.limit.amount, spent: spentThisMonth(data, clean.limit.category) });
+    }
+  }
+
   function next(e?: FormEvent) {
     e?.preventDefault();
     if (!canContinue) return;
-    if (last) finish(draft);
+    if (last) void finish(draft);
     else setStep((s) => s + 1);
   }
 
@@ -194,9 +210,9 @@ function OnboardingFlow() {
                     Your Sui address <span className="tabular-nums">{shortAddress(session.address)}</span>
                   </p>
                   <p className="mt-1 text-[14px] text-muted">
-                    {session.method === "google"
-                      ? "Created from your Google sign-in with zkLogin. No seed phrase to keep safe."
-                      : "This is the demo wallet. Sign in with Google to get your own address."}
+                    {session.method === "wallet"
+                      ? "From the wallet you connected. Sovra only reads it and can never move your money."
+                      : "This is the demo wallet. Connect your own Sui wallet to use your address."}
                   </p>
                 </div>
               </div>

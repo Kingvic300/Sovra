@@ -14,7 +14,7 @@ const SIGNED_IN_LINKS = [
 
 const PUBLIC_LINKS = [
   { to: "/", label: "Home", body: "What Sovra is and why it remembers" },
-  { to: "/how-it-works", label: "How it works", body: "From Google sign-in to advice that fits" },
+  { to: "/how-it-works", label: "How it works", body: "From wallet sign-in to advice that fits" },
   { to: "/security", label: "Security", body: "What Sovra can see and never does" },
   { to: "/faq", label: "FAQ", body: "Including how money gets into your account" },
 ];

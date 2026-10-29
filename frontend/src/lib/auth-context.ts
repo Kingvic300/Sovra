@@ -1,12 +1,13 @@
 import { createContext, useContext } from "react";
+import type { UiWallet } from "@mysten/dapp-kit-react";
 import type { CategoryId } from "@/lib/demo-data";
 import type { ServerSession } from "@/lib/server-session";
 
-export type SignInMethod = "google" | "demo";
+export type SignInMethod = "wallet" | "demo";
 
 export type Session = {
   method: SignInMethod;
-  /** zkLogin Sui address for Google users; the demo wallet for the demo account. */
+  /** The connected Sui wallet address, or the demo wallet for the demo account. */
   address: string;
   name: string;
   email?: string;
@@ -26,13 +27,14 @@ export type AuthState = {
   status: "loading" | "signed-out" | "signed-in";
   session: Session | null;
   profile: Profile | null;
-  zkLoginConfigured: boolean;
   /** Whether the backend has verified this session (see server-session.ts). */
   server: ServerSession;
-  signInWithGoogle: () => Promise<void>;
+  /** Connects a Sui wallet. The backend session follows once the wallet signs Sovra's challenge. */
+  signInWithWallet: (wallet: UiWallet) => Promise<void>;
   startDemo: () => void;
   signOut: () => Promise<void>;
-  saveProfile: (profile: Profile) => void;
+  /** Saves in the browser, and on the backend when it has a session. Rejects if the backend refuses. */
+  saveProfile: (profile: Profile) => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthState | null>(null);

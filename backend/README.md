@@ -1,6 +1,6 @@
 # Sovra backend
 
-NestJS API for Sovra. It verifies zkLogin sign-ins, reads USDC on Sui through Tatum, stores what Sovra learns in Walrus Memory, answers questions with Groq, and keeps transactions, budgets and goals in Postgres.
+NestJS API for Sovra. It verifies Sui wallet sign-ins, reads USDC on Sui through Tatum, stores what Sovra learns in Walrus Memory, answers questions with Groq, and keeps transactions, budgets and goals in Postgres.
 
 The frontend (Vite, `:5173`) proxies `/api` to this server (`:8787`). Sessions are an HTTP-only cookie holding a signed JWT.
 
@@ -38,7 +38,7 @@ Tests need no database, keys or network:
 
 - **Unit tests** sit next to the code (`src/**/*.spec.ts`): recurring detection, CSV parsing, categories, memory sentences, Tatum transfer parsing, the Groq provider (with `fetch` mocked), env validation and error handling.
 - **Integration tests** (`src/e2e/*.e2e.spec.ts`) boot the real `AppModule` on a random port with the same HTTP setup as `main.ts` (`src/app.setup.ts`). The database is in-process Postgres ([PGlite](https://pglite.dev)) with the migrations in `drizzle/` applied, so a schema change without a migration fails the tests.
-- Groq, Walrus Memory and Tatum are never called. `src/testing/` has fakes (`FakeAi`, `FakeMemWal`) and helpers: `createTestApp`, `createTestDatabase`, and `signIn`, which runs the real nonce + signature flow with an Ed25519 key (verified offline, same code path as zkLogin).
+- Groq, Walrus Memory and Tatum are never called. `src/testing/` has fakes (`FakeAi`, `FakeMemWal`) and helpers: `createTestApp`, `createTestDatabase`, and `signIn`, which runs the real nonce + signature flow with an Ed25519 key (verified offline, same code path as a wallet).
 
 CI (`.github/workflows/ci.yml`) runs typecheck, build and tests for the backend, and lint and build for the frontend, on every pull request and push to `main`.
 
@@ -75,7 +75,7 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | --- | --- | --- |
 | GET | `/health` | Liveness and which integrations are configured |
 | POST | `/auth/nonce` | `{address}` → `{message, expiresAt}`: the text to sign |
-| POST | `/auth/verify` | `{address, message, signature, name?, email?}` → checks the zkLogin signature, sets the cookie |
+| POST | `/auth/verify` | `{address, message, signature, name?, email?}` → checks the wallet signature, sets the cookie |
 | POST | `/auth/demo` | Creates a fresh demo account with sample data and starts its session (see [Demo accounts](#demo-accounts)) |
 | POST | `/auth/logout` | Clears the cookie |
 | GET | `/me` | Session user and saved profile (`profile: null` without a database) |
@@ -140,7 +140,7 @@ Each `POST /auth/demo` creates a new account for that visitor: a random Sui addr
 
 ## How the integrations work
 
-**Sign-in (zkLogin).** The frontend signs in with Google through Enoki, which gives the user a Sui address. To prove it to this server, the frontend asks `/auth/nonce` for a challenge, signs that exact string with `signPersonalMessage`, and posts it to `/auth/verify`. The server checks the signature with `verifyPersonalMessageSignature` from `@mysten/sui/verify`, passing a Sui GraphQL client, because zkLogin signatures are verified on-chain. Nonces are single-use and expire after five minutes.
+**Sign-in (Sui wallet).** The frontend connects a Sui wallet. To prove the address to this server, it asks `/auth/nonce` for a challenge, signs that exact string with `signPersonalMessage`, and posts it to `/auth/verify`. The server checks the signature with `verifyPersonalMessageSignature` from `@mysten/sui/verify`, passing a Sui GraphQL client so zkLogin-based wallets (which are verified on-chain) work too. Nonces are single-use and expire after five minutes. Signed-in wallet users are stored with `method: "google"`, a name left from the earlier zkLogin sign-in.
 
 **Tatum.** Tatum's Sui mainnet gateway currently exposes GraphQL at `https://sui-mainnet.gateway.tatum.io/graphql`; its `/_methods` list shows no JSON-RPC. Balances use the `@mysten/sui` GraphQL client's `core.getBalance`. Transfers come from a `transactions(filter: { affectedAddress })` query, reduced to USDC balance changes. USDC is Circle's native coin type `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC`. Without a Tatum key, sign-in verification falls back to the public `graphql.mainnet.sui.io` endpoint.
 

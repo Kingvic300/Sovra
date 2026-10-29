@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
 import { Progress } from "@/components/ui/progress";
-import { MONTH_END, budgetViews, useAppData } from "@/lib/app-data";
+import { budgetViews, useAppData } from "@/lib/app-data";
 import { budgetTone } from "@/lib/budget-tone";
-import { BUDGET_SUGGESTIONS, CATEGORIES, TODAY } from "@/lib/demo-data";
+import { BUDGET_SUGGESTIONS, CATEGORIES } from "@/lib/demo-data";
 import { daysBetween, money, monthName } from "@/lib/format";
 import { useTitle } from "@/lib/use-title";
 
@@ -19,12 +19,14 @@ export default function BudgetsPage() {
   const budgets = budgetViews(data);
   const totalLimit = budgets.reduce((s, b) => s + b.limit, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
-  const daysLeft = daysBetween(TODAY, MONTH_END);
+  const daysLeft = daysBetween(data.today, data.monthEnd);
+  // Suggestions are written for the sample story; live ones show only where that budget exists.
+  const suggestions = BUDGET_SUGGESTIONS.filter((s) => data.source === "sample" || data.budgets.some((b) => b.category === s.category));
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`${monthName(TODAY)} budgets`}
+        title={`${monthName(data.today)} budgets`}
         description={`${money(totalSpent, { whole: true })} of ${money(totalLimit, { whole: true })} spent, ${daysLeft} days left in the month. Hatched segments are renewals already scheduled.`}
         action={
           <Button onClick={() => setAdding(true)}>
@@ -76,8 +78,8 @@ export default function BudgetsPage() {
         </Panel>
 
         <div className="flex flex-col gap-4">
-          <h2 className="text-[15px] font-semibold">Suggested from your history</h2>
-          {BUDGET_SUGGESTIONS.map((s) => (
+          {suggestions.length > 0 && <h2 className="text-[15px] font-semibold">Suggested from your history</h2>}
+          {suggestions.map((s) => (
             <BudgetSuggestionCard key={s.id} suggestion={s} />
           ))}
         </div>
