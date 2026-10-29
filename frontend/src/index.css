@@ -34,9 +34,16 @@
     background: var(--color-porcelain);
     color: var(--color-ink);
   }
+  /* Nothing may scroll the page sideways on phones. `clip` (not `hidden`) keeps position: sticky working. */
+  html,
+  body {
+    overflow-x: clip;
+  }
   body {
     font-size: 15px;
     line-height: 1.5;
+    /* Long unbroken strings (wallet addresses, emails, URLs) wrap instead of pushing the page wider. */
+    overflow-wrap: break-word;
   }
   /* A modal <dialog> doesn't stop the page behind it from scrolling, so lock it while one is open. */
   html:has(dialog[open]) {

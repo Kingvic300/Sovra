@@ -134,9 +134,9 @@ function TransactionsSkeleton() {
         <Skeleton className="h-10 flex-1 rounded-lg sm:max-w-80 sm:flex-none sm:basis-80" />
         <Skeleton className="ml-auto h-10 w-32 rounded-lg" />
       </div>
-      <div className="flex gap-2 overflow-hidden">
+      <div className="flex flex-wrap gap-2">
         {["w-16", "w-28", "w-24", "w-32", "w-24", "w-28"].map((w, i) => (
-          <Skeleton key={i} className={`h-9 shrink-0 rounded-full ${w}`} />
+          <Skeleton key={i} className={`h-9 rounded-full ${w}`} />
         ))}
       </div>
       <Card>

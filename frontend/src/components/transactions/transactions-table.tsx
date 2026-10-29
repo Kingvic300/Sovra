@@ -11,7 +11,7 @@ import { useToast } from "@/lib/toast-context";
 
 type Pending = { txId: string; merchant: string; category: CategoryId };
 
-/** Category filter with a live count, compact enough to scroll as a strip on phones. */
+/** Category filter with a live count. */
 function FilterPill({ active, count, onClick, children }: { active: boolean; count: number; onClick: () => void; children: string }) {
   return (
     <button
@@ -132,9 +132,9 @@ export function TransactionsTable() {
           </Link>
         </div>
 
-        {/* Phones: one scrolling strip, faded at the edge so it reads as more to swipe. */}
+        {/* Wraps on every width: the page never scrolls sideways on phones. */}
         <div
-          className="-mx-4 flex gap-2 overflow-x-auto px-4 py-0.5 [mask-image:linear-gradient(to_right,transparent,black_1rem,black_calc(100%-2.5rem),transparent)] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:[mask-image:none] [&>*]:shrink-0"
+          className="flex flex-wrap gap-2 py-0.5"
           role="group"
           aria-label="Filter by category"
         >

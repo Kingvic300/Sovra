@@ -22,7 +22,7 @@ export default function RouteErrorPage() {
             : "Your data is safe. Reload the page, or go back to the overview."}
         </p>
         {import.meta.env.DEV && detail && (
-          <pre className="max-w-full overflow-x-auto rounded-lg bg-card px-4 py-3 text-[13px] text-over shadow-card">{detail}</pre>
+          <pre className="max-w-full rounded-lg whitespace-pre-wrap break-words bg-card px-4 py-3 text-[13px] text-over shadow-card">{detail}</pre>
         )}
         <div className="mt-2 flex gap-2">
           <Link to="/app" className={buttonClass()}>
