@@ -1,8 +1,8 @@
-import { Link } from "react-router";
-import { MessageSquareText } from "lucide-react";
+import { Link, useLocation } from "react-router";
 import { TopUpButton } from "@/components/topup/top-up-button";
 import type { ShellStats } from "@/lib/app-data";
 import { money } from "@/lib/format";
+import { AskBar } from "./ask-bar";
 import { Logo } from "./logo";
 import { NotificationsButton } from "./notifications-button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +24,7 @@ function StatusPill({ to, live, children }: { to: string; live: boolean; childre
 }
 
 export function Topbar({ stats }: { stats: ShellStats }) {
+  const { pathname } = useLocation();
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-porcelain/90 pt-[env(safe-area-inset-top)] backdrop-blur">
       {/* Phones and small tablets: app icon, memory and balance pills, alerts, profile. Navigation is in the tab bar. */}
@@ -59,13 +60,8 @@ export function Topbar({ stats }: { stats: ShellStats }) {
 
       {/* Desktop */}
       <div className="hidden h-16 items-center gap-3 px-10 lg:flex 2xl:px-12">
-        <Link
-          to="/app/ask"
-          className="flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-full border border-field/60 bg-card px-4 text-muted transition-colors hover:border-cobalt hover:text-ink md:max-w-[440px]"
-        >
-          <MessageSquareText className="size-4 shrink-0 text-cobalt" aria-hidden />
-          <span className="truncate">Ask Sovra about your money</span>
-        </Link>
+        {/* The Ask page has its own composer. */}
+        {!pathname.startsWith("/app/ask") && <AskBar />}
 
         <div className="ml-auto flex items-center gap-2.5">
           <div className="hidden items-center gap-2 xl:flex">

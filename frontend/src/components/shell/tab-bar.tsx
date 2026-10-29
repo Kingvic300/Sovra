@@ -8,8 +8,6 @@ import {
   Ellipsis,
   Highlighter,
   House,
-  MessageSquareText,
-  Plus,
   Repeat,
   Target,
   Upload,
@@ -21,12 +19,13 @@ import { AddGoalDialog } from "@/components/goals/add-goal-dialog";
 import { TopUpDialog } from "@/components/topup/top-up-dialog";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import type { ShellStats } from "@/lib/app-data";
+import { Logo } from "./logo";
 import { isActive } from "./nav-items";
 
 type Tab = { href: string; label: string; icon: LucideIcon; badge?: number };
 type Dialog = "topup" | "budget" | "goal" | null;
 
-const MORE_ROUTES = ["/app/transactions", "/app/goals", "/app/recurring", "/app/ask", "/app/accounts"];
+const MORE_ROUTES = ["/app/transactions", "/app/goals", "/app/recurring", "/app/accounts"];
 
 function TabLink({ tab, pathname }: { tab: Tab; pathname: string }) {
   const active = isActive(pathname, tab.href);
@@ -94,11 +93,48 @@ function SheetRow({
   );
 }
 
+/** One-tap action at the top of the More sheet. */
+function ActionTile({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-center gap-1.5 rounded-2xl px-1 py-2.5 text-center text-[12px] leading-tight font-medium transition-colors hover:bg-porcelain"
+    >
+      <span className="grid size-11 place-items-center rounded-xl bg-cobalt-soft text-cobalt">
+        <Icon className="size-5" aria-hidden />
+      </span>
+      {label}
+    </button>
+  );
+}
+
+/** Raised centre tab: Ask Sovra is the app's main feature, one thumb-reach away on every screen. */
+function AskTab({ pathname }: { pathname: string }) {
+  const active = isActive(pathname, "/app/ask");
+  return (
+    <Link
+      to="/app/ask"
+      aria-current={active ? "page" : undefined}
+      className="group flex min-h-14 flex-col items-center justify-end gap-1 pb-1.5 text-[11px] font-semibold text-cobalt"
+    >
+      <span
+        className={`-mt-5 grid size-14 place-items-center rounded-2xl text-white shadow-pop ring-4 ring-card transition-[transform,background-color] group-hover:bg-cobalt-deep group-active:scale-95 ${
+          active ? "bg-cobalt-deep" : "bg-cobalt"
+        }`}
+      >
+        <Logo variant="white" className="size-7" />
+      </span>
+      Ask Sovra
+    </Link>
+  );
+}
+
 /** Bottom navigation for phones and small tablets. */
 export function TabBar({ stats }: { stats: ShellStats }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const [sheet, setSheet] = useState<"actions" | "more" | null>(null);
+  const [sheet, setSheet] = useState<"more" | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const moreActive = MORE_ROUTES.some((r) => pathname.startsWith(r));
 
@@ -121,17 +157,7 @@ export function TabBar({ stats }: { stats: ShellStats }) {
         <div className="mx-auto grid max-w-[560px] grid-cols-5 items-center px-2">
           <TabLink tab={{ href: "/app", label: "Home", icon: House }} pathname={pathname} />
           <TabLink tab={{ href: "/app/budgets", label: "Budgets", icon: ChartPie, badge: stats.budgetsOver }} pathname={pathname} />
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={() => setSheet("actions")}
-              aria-label="Quick actions"
-              aria-haspopup="dialog"
-              className="grid size-12 place-items-center rounded-2xl bg-ink text-white shadow-pop transition-transform hover:bg-cobalt active:scale-95"
-            >
-              <Plus className="size-6" strokeWidth={2.4} aria-hidden />
-            </button>
-          </div>
+          <AskTab pathname={pathname} />
           <TabLink tab={{ href: "/app/memory", label: "Memory", icon: Highlighter }} pathname={pathname} />
           <button
             type="button"
@@ -151,15 +177,13 @@ export function TabBar({ stats }: { stats: ShellStats }) {
         </div>
       </nav>
 
-      <BottomSheet open={sheet === "actions"} onClose={() => setSheet(null)} title="Quick actions">
-        <SheetRow icon={ArrowDownToLine} title="Top up" body="Add USDC to your Sui wallet" onClick={() => openDialog("topup")} />
-        <SheetRow icon={MessageSquareText} title="Ask Sovra" body="A question about your money" onClick={() => go("/app/ask")} />
-        <SheetRow icon={ChartPie} title="Add a budget" body="Set a monthly limit" onClick={() => openDialog("budget")} />
-        <SheetRow icon={Target} title="Add a goal" body="Something you're saving for" onClick={() => openDialog("goal")} />
-        <SheetRow icon={Upload} title="Import a statement" body="Upload a CSV, Excel or PDF from your bank" onClick={() => go("/app/accounts")} />
-      </BottomSheet>
-
       <BottomSheet open={sheet === "more"} onClose={() => setSheet(null)} title="More">
+        <div className="mb-2 grid grid-cols-4 gap-1 border-b border-line pb-3" role="group" aria-label="Quick actions">
+          <ActionTile icon={ArrowDownToLine} label="Top up" onClick={() => openDialog("topup")} />
+          <ActionTile icon={ChartPie} label="Add budget" onClick={() => openDialog("budget")} />
+          <ActionTile icon={Target} label="Add goal" onClick={() => openDialog("goal")} />
+          <ActionTile icon={Upload} label="Import" onClick={() => go("/app/accounts")} />
+        </div>
         <SheetRow icon={ArrowLeftRight} title="Transactions" body={`${stats.transactions} this month`} onClick={() => go("/app/transactions")} />
         <SheetRow icon={Target} title="Goals" onClick={() => go("/app/goals")} />
         <SheetRow
@@ -169,7 +193,6 @@ export function TabBar({ stats }: { stats: ShellStats }) {
           badge={stats.dueSoon ? `${stats.dueSoon} due` : undefined}
           onClick={() => go("/app/recurring")}
         />
-        <SheetRow icon={MessageSquareText} title="Ask Sovra" onClick={() => go("/app/ask")} />
         <SheetRow icon={Wallet} title="Wallet and accounts" body="Sui wallet, statements, top-up" onClick={() => go("/app/accounts")} />
       </BottomSheet>
 

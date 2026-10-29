@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router";
 import { ArrowUp } from "lucide-react";
 import { Logo } from "@/components/shell/logo";
 import { Remembered } from "@/components/ui/remembered";
@@ -21,6 +22,8 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
   const [thinking, setThinking] = useState(false);
   const toast = useToast();
   const { data, reload } = useAppData();
+  const [params, setParams] = useSearchParams();
+  const askedFromUrl = useRef(false);
 
   async function send(text: string) {
     const question = text.trim();
@@ -50,6 +53,15 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
       setThinking(false);
     }
   }
+
+  // A question typed in the top bar arrives as ?q= and is asked once.
+  useEffect(() => {
+    const q = params.get("q");
+    if (!q || askedFromUrl.current) return;
+    askedFromUrl.current = true;
+    setParams({}, { replace: true });
+    void send(q);
+  });
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
