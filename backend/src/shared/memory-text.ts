@@ -32,3 +32,10 @@ export function paydaySentence(payday: number | "irregular") {
 export function categoryRuleSentence(merchant: string, category: CategoryId) {
   return `${merchant} transactions are ${CATEGORY_LABELS[category].toLowerCase()}.`;
 }
+
+export function recurringDecisionSentence(merchant: string, status: "active" | "paused", on: Date, categoryLabel: string) {
+  const day = `${on.getUTCDate()} ${MONTHS[on.getUTCMonth()].slice(0, 3)}`;
+  return status === "paused"
+    ? `You paused ${merchant} in Sovra on ${day}, so it no longer counts against your ${categoryLabel.toLowerCase()} budget.`
+    : `You resumed ${merchant} in Sovra on ${day}, so it counts against your ${categoryLabel.toLowerCase()} budget again.`;
+}

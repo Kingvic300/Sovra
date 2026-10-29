@@ -74,7 +74,8 @@ export class AskService {
       ),
       attempt("upcoming bills", db, async () => {
         const horizon = new Date(Date.now() + UPCOMING_DAYS * 86_400_000).toISOString().slice(0, 10);
-        return (await this.recurring.list(session.address)).filter((r) => r.nextDate <= horizon);
+        // Paused charges are ones the user told Sovra to stop counting.
+        return (await this.recurring.active(session.address)).filter((r) => r.nextDate <= horizon);
       }),
       // Email accounts have no wallet; their address is only an id.
       attempt("Sui wallet balance", this.tatum.configured && session.method !== "email", () =>

@@ -85,10 +85,13 @@ export class FakeMemWal {
   readonly stored: { namespace: string; text: string; blobId: string }[] = [];
   /** Every call that reached the relayer, for asserting that some flows never touch Walrus. */
   calls = 0;
+  /** When true, `remember` fails like a relayer outage. */
+  failing = false;
   private jobs = 0;
 
   async remember(text: string, namespace: string) {
     this.calls++;
+    if (this.failing) throw new Error("fake relayer outage");
     const jobId = `job-${++this.jobs}`;
     this.stored.push({ namespace, text, blobId: `blob-${jobId}` });
     return { job_id: jobId };

@@ -101,14 +101,16 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | GET | `/transactions?month=&category=&limit=` | Transactions, newest first |
 | POST | `/transactions/import?preview=1&dateOrder=dmy` | Multipart `file`: a CSV, an Excel workbook (`.xlsx`: each sheet with a date, description and amount table becomes its own account, found below any title block) or a PDF (its text is read into rows by the AI model; not for demo accounts, and read once for a preview and the import that follows) (+ optional `accountName`). With `preview=1` nothing is saved. When the CSV has a balance column, the balance after its latest row becomes the account balance (`closingBalance` in the preview). On import, merchants without a learned rule are categorized by Groq when configured; the response's `categorizedBy` counts rules, AI and keyword fallbacks |
 | PATCH | `/transactions/:id` | `{category, remember}`. With `remember: true` it saves a merchant rule, recategorizes that merchant and writes a memory |
-| GET | `/budgets?month=` | Limits with spending for the month |
+| GET | `/budgets?month=` | Limits with `spent` for the month, `committed` (active recurring charges still expected before the month ends; paused ones and ended months count 0), `projected` (spent + committed) and the `renewals` behind it |
 | PUT | `/budgets/:category` | `{limit}` |
 | DELETE | `/budgets/:category` | Removes a limit |
 | GET | `/goals` | Savings goals |
 | POST | `/goals` | `{name, target, saved?, due, weekly?}` |
 | PATCH | `/goals/:id` | Partial update |
 | DELETE | `/goals/:id` | Removes a goal |
-| GET | `/recurring` | Repeating charges detected from the last 120 days |
+| GET | `/recurring` | Repeating charges detected from the last 120 days, each with a stable `id`, `status` (`active` or `paused`) and `pausedAt` |
+| POST | `/recurring/:id/pause` | Stops Sovra counting the charge in projections, upcoming bills and reminders → `{recurring, changed, memory, note}`. Doesn't cancel anything with the merchant (`note` says so). Repeating it changes nothing |
+| POST | `/recurring/:id/resume` | Counts it again |
 | POST | `/ask` | `{question}` → `{answer, usedMemories: [{id, text}], model, id, createdAt}`. `503 not_configured` without `GROQ_API_KEY`, `429 rate_limited`, `502 ai_upstream_error`. Answered questions are saved to history (`id` is null without a database) |
 | GET | `/ask/history?limit=&before=` | `{messages, nextCursor}`: saved questions and answers, newest first. `limit` 1 to 50 (default 20); pass `nextCursor` as `before` for the next page |
 | DELETE | `/ask/history` | Clears the user's Ask history → `{deleted}` |
