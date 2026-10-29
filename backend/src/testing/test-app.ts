@@ -12,7 +12,7 @@ import { DatabaseService } from "../database/database.service.js";
 import { MemwalService } from "../memory/memwal.service.js";
 import { upstreamFailed } from "../common/errors.js";
 import type { CategoryId } from "../shared/categories.js";
-import { TatumService } from "../wallet/tatum.service.js";
+import { TatumService, USDC_COIN_TYPE } from "../wallet/tatum.service.js";
 import type { TestDatabase } from "./test-database.js";
 
 export const TEST_SESSION_SECRET = "test-session-secret-not-for-production";
@@ -25,6 +25,7 @@ const GENEROUS_RATE_LIMITS = {
   RATE_LIMIT_ASK_PER_HOUR: "100000",
   RATE_LIMIT_IMPORT_PER_HOUR: "100000",
   RATE_LIMIT_DEMO_ASK_PER_HOUR: "100000",
+  RATE_LIMIT_WALLET_SYNC_PER_HOUR: "100000",
 };
 
 /** Stands in for Groq. Records every call so tests can check what the model would have seen. */
@@ -105,6 +106,74 @@ export class FakeTatum {
   }
 }
 
+type ChainNode = {
+  digest: string;
+  sender: { address: string } | null;
+  effects: {
+    timestamp: string | null;
+    status: string | null;
+    balanceChanges: { nodes: { owner: { address: string }; coinType: { repr: string }; amount: string }[] };
+  };
+};
+
+/**
+ * Stands in for Tatum's Sui GraphQL endpoint. Each address has a history (oldest first) served in
+ * pages from the newest end, with stable index cursors like the real connection's.
+ */
+export class FakeSuiGraphQL {
+  readonly history = new Map<string, ChainNode[]>();
+  readonly balances = new Map<string, string>();
+  queries = 0;
+  balanceReads = 0;
+  failQueries = false;
+  failBalances = false;
+
+  /** Adds a USDC transfer to both parties' histories. */
+  transfer(t: { digest: string; from: string; to: string; usdc: number; at: string; status?: "SUCCESS" | "FAILURE"; coin?: string }) {
+    const raw = String(Math.round(t.usdc * 1e6));
+    const node: ChainNode = {
+      digest: t.digest,
+      sender: { address: t.from },
+      effects: {
+        timestamp: t.at,
+        status: t.status ?? "SUCCESS",
+        balanceChanges: {
+          nodes: [
+            { owner: { address: t.from }, coinType: { repr: t.coin ?? USDC_COIN_TYPE }, amount: `-${raw}` },
+            { owner: { address: t.to }, coinType: { repr: t.coin ?? USDC_COIN_TYPE }, amount: raw },
+          ],
+        },
+      },
+    };
+    for (const address of [t.from, t.to]) this.history.set(address, [...(this.history.get(address) ?? []), node]);
+  }
+
+  async query({ variables }: { variables: { address: string; last: number; before: string | null } }) {
+    this.queries++;
+    if (this.failQueries) throw new Error("fake GraphQL outage");
+    const all = this.history.get(variables.address) ?? [];
+    const end = variables.before == null ? all.length : Number(variables.before);
+    const start = Math.max(0, end - variables.last);
+    const nodes = all.slice(start, end);
+    return { data: { transactions: { pageInfo: { hasPreviousPage: start > 0, startCursor: nodes.length ? String(start) : null }, nodes } } };
+  }
+
+  readonly core = {
+    getBalance: async ({ owner }: { owner: string }) => {
+      this.balanceReads++;
+      if (this.failBalances) throw new Error("fake balance outage");
+      return { balance: { balance: String(Math.round(Number(this.balances.get(owner) ?? "0") * 1e6)) } };
+    },
+  };
+}
+
+/** The real TatumService (query building, paging, parsing) talking to a fake chain. */
+export function tatumWithFakeChain(chain: FakeSuiGraphQL) {
+  const service = new TatumService(loadEnv({ SESSION_SECRET: TEST_SESSION_SECRET, TATUM_API_KEY: "fake-key" }));
+  (service as unknown as { tatum: unknown }).tatum = chain;
+  return service;
+}
+
 export type TestApp = {
   app: INestApplication;
   baseUrl: string;
@@ -118,7 +187,7 @@ export type TestApp = {
  * External services are off unless a fake is passed, so tests never call Groq, Walrus or Tatum.
  */
 export async function createTestApp(
-  options: { database?: TestDatabase; ai?: AiProvider; memwal?: FakeMemWal; tatum?: FakeTatum; env?: Record<string, string> } = {},
+  options: { database?: TestDatabase; ai?: AiProvider; memwal?: FakeMemWal; tatum?: FakeTatum | TatumService; env?: Record<string, string> } = {},
 ): Promise<TestApp> {
   // Set TEST_LOGS=1 to see server-side errors while debugging a test.
   const logger = process.env.TEST_LOGS ? (["error", "warn"] as const) : false;

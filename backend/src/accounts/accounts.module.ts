@@ -74,21 +74,31 @@ export class AccountsService {
   }
 
   /**
-   * Total balance and a 30-day trend. The total adds accounts with a known balance and the live
-   * Sui balance; anything that couldn't be counted is listed in `missing` instead of being guessed.
+   * Total balance and a 30-day trend. The total adds accounts with a known balance and the Sui
+   * wallet, counted once: its live balance when Tatum answers, otherwise the balance from the last
+   * sync. Anything that couldn't be counted is listed in `missing` instead of being guessed.
    * The trend covers accounts with a known balance and works backwards from it: the balance at
    * the end of a day is today's balance minus every transaction dated after that day.
    */
   async summary(session: Session, now = new Date()) {
-    const [list, wallet] = await Promise.all([this.list(session.address), this.wallet(session)]);
+    const [stored, wallet] = await Promise.all([this.list(session.address), this.wallet(session)]);
+    const synced = stored.find((a) => a.kind === "sui");
+    const list = stored.map((a) => (a.kind === "sui" && wallet.status === "live" ? { ...a, balance: wallet.usdc } : a));
     const known = list.filter((a): a is typeof a & { balance: number } => a.balance !== null);
+    const walletMissing = synced ? list.find((a) => a.kind === "sui")!.balance === null : wallet.status !== "live";
     const missing = [
-      ...list.filter((a) => a.balance === null).map((a) => ({ id: a.id, name: a.name, reason: "balance_unknown" as const })),
-      ...(wallet.status === "live" ? [] : [{ id: null, name: "Sui wallet", reason: wallet.status }]),
+      ...list
+        .filter((a) => a.balance === null && a.kind !== "sui")
+        .map((a) => ({ id: a.id, name: a.name, reason: "balance_unknown" as const })),
+      ...(walletMissing ? [{ id: synced?.id ?? null, name: synced?.name ?? "Sui wallet", reason: wallet.status }] : []),
     ];
 
-    const banks = known.reduce((sum, a) => sum + a.balance, 0);
-    const total = known.length || wallet.usdc !== null ? cents(banks + (wallet.usdc ?? 0)) : null;
+    const banks = known.filter((a) => a.kind !== "sui").reduce((sum, a) => sum + a.balance, 0);
+    const counted = known.reduce((sum, a) => sum + a.balance, 0);
+    // Without a synced Sui account, the live wallet isn't in `known`, so add it here.
+    const unsyncedWallet = synced ? 0 : (wallet.usdc ?? 0);
+    const total = known.length || (!synced && wallet.usdc !== null) ? cents(counted + unsyncedWallet) : null;
+    const bankAccounts = known.filter((a) => a.kind !== "sui");
 
     const days = Array.from({ length: TREND_DAYS }, (_, i) => isoDay(now.getTime() - (TREND_DAYS - 1 - i) * DAY));
     let trend: { date: string; balance: number }[] = [];
@@ -109,14 +119,14 @@ export class AccountsService {
         .groupBy(transactions.date);
       trend = days.map((day) => ({
         date: day,
-        balance: cents(banks - moves.filter((m) => m.date > day).reduce((sum, m) => sum + Number(m.amount), 0)),
+        balance: cents(counted - moves.filter((m) => m.date > day).reduce((sum, m) => sum + Number(m.amount), 0)),
       }));
     }
 
     return {
       currency: "USD",
       total,
-      banks: known.length ? cents(banks) : null,
+      banks: bankAccounts.length ? cents(banks) : null,
       wallet,
       missing,
       trend,
