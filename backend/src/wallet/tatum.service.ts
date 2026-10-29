@@ -21,25 +21,30 @@ export type UsdcTransfer = {
   status: "success" | "failure" | "unknown";
 };
 
-type TransfersQuery = {
-  transactions: {
-    nodes: {
-      digest: string;
-      sender: { address: string } | null;
-      effects: {
-        timestamp: string | null;
-        status: string | null;
-        balanceChanges: {
-          nodes: { owner: { address: string } | null; coinType: { repr: string } | null; amount: string | null }[];
-        } | null;
-      } | null;
-    }[];
+type TransactionNode = {
+  digest: string;
+  sender: { address: string } | null;
+  effects: {
+    timestamp: string | null;
+    status: string | null;
+    balanceChanges: {
+      nodes: { owner: { address: string } | null; coinType: { repr: string } | null; amount: string | null }[];
+    } | null;
   } | null;
 };
 
+type TransfersQuery = {
+  transactions: {
+    pageInfo?: { hasPreviousPage: boolean; startCursor: string | null } | null;
+    nodes: TransactionNode[];
+  } | null;
+};
+
+/** Pages backwards from the newest transaction: `last` per page, `before` = the previous page's startCursor. */
 const TRANSFERS_QUERY = `
-  query SovraUsdcTransfers($address: SuiAddress!, $last: Int!) {
-    transactions(last: $last, filter: { affectedAddress: $address }) {
+  query SovraUsdcTransfers($address: SuiAddress!, $last: Int!, $before: String) {
+    transactions(last: $last, before: $before, filter: { affectedAddress: $address }) {
+      pageInfo { hasPreviousPage startCursor }
       nodes {
         digest
         sender { address }
@@ -66,6 +71,34 @@ export function formatUnits(raw: bigint, decimals: number) {
 }
 
 const normalize = (address: string) => address.toLowerCase();
+
+/** Reduces transactions touching `address` to its USDC movements, keeping their order. */
+export function usdcTransfersFrom(nodes: TransactionNode[], address: string): UsdcTransfer[] {
+  const me = normalize(address);
+  const transfers: UsdcTransfer[] = [];
+  for (const tx of nodes) {
+    const changes = (tx.effects?.balanceChanges?.nodes ?? []).filter(
+      (c) => c.coinType?.repr && normalize(c.coinType.repr) === normalize(USDC_COIN_TYPE) && c.amount,
+    );
+    const mine = changes.find((c) => c.owner && normalize(c.owner.address) === me);
+    if (!mine?.amount) continue;
+    const amount = BigInt(mine.amount);
+    if (amount === 0n) continue;
+    const direction = amount > 0n ? "in" : "out";
+    const other = changes.find(
+      (c) => c.owner && normalize(c.owner.address) !== me && c.amount && (BigInt(c.amount) > 0n) !== (amount > 0n),
+    );
+    transfers.push({
+      digest: tx.digest,
+      date: tx.effects?.timestamp ?? null,
+      direction,
+      amount: formatUnits(amount < 0n ? -amount : amount, USDC_DECIMALS),
+      counterparty: other?.owner?.address ?? (direction === "in" ? (tx.sender?.address ?? null) : null),
+      status: tx.effects?.status === "SUCCESS" ? "success" : tx.effects?.status === "FAILURE" ? "failure" : "unknown",
+    });
+  }
+  return transfers;
+}
 
 @Injectable()
 export class TatumService {
@@ -103,42 +136,36 @@ export class TatumService {
     }
   }
 
-  /** Recent transactions touching `address`, reduced to USDC movements in or out of it. */
+  /** Recent transactions touching `address`, reduced to USDC movements in or out of it, newest first. */
   async getRecentUsdcTransfers(address: string, limit = 25): Promise<UsdcTransfer[]> {
+    return (await this.getUsdcTransferPage(address, { last: limit })).transfers.reverse();
+  }
+
+  /**
+   * One page of history, oldest first within the page. Pass the returned `before` to get the
+   * page of older transactions; `hasOlder` is false once the start of the address's history is reached.
+   * Read-only: this never builds, signs or sends a transaction.
+   */
+  async getUsdcTransferPage(address: string, page: { last: number; before?: string | null }) {
     const client = this.client;
     const result = await client
-      .query<TransfersQuery, { address: string; last: number }>({
+      .query<TransfersQuery, { address: string; last: number; before: string | null }>({
         query: TRANSFERS_QUERY,
-        variables: { address, last: limit },
+        variables: { address, last: page.last, before: page.before ?? null },
       })
       .catch((err: unknown) => {
         throw upstreamFailed("Tatum", err instanceof Error ? err.message : undefined);
       });
     if (result.errors?.length) throw upstreamFailed("Tatum", result.errors[0].message);
 
-    const me = normalize(address);
-    const transfers: UsdcTransfer[] = [];
-    for (const tx of result.data?.transactions?.nodes ?? []) {
-      const changes = (tx.effects?.balanceChanges?.nodes ?? []).filter(
-        (c) => c.coinType?.repr && normalize(c.coinType.repr) === normalize(USDC_COIN_TYPE) && c.amount,
-      );
-      const mine = changes.find((c) => c.owner && normalize(c.owner.address) === me);
-      if (!mine?.amount) continue;
-      const amount = BigInt(mine.amount);
-      if (amount === 0n) continue;
-      const direction = amount > 0n ? "in" : "out";
-      const other = changes.find(
-        (c) => c.owner && normalize(c.owner.address) !== me && c.amount && (BigInt(c.amount) > 0n) !== (amount > 0n),
-      );
-      transfers.push({
-        digest: tx.digest,
-        date: tx.effects?.timestamp ?? null,
-        direction,
-        amount: formatUnits(amount < 0n ? -amount : amount, USDC_DECIMALS),
-        counterparty: other?.owner?.address ?? (direction === "in" ? (tx.sender?.address ?? null) : null),
-        status: tx.effects?.status === "SUCCESS" ? "success" : tx.effects?.status === "FAILURE" ? "failure" : "unknown",
-      });
-    }
-    return transfers.reverse();
+    const connection = result.data?.transactions;
+    const nodes = connection?.nodes ?? [];
+    const before = connection?.pageInfo?.startCursor ?? null;
+    return {
+      transfers: usdcTransfersFrom(nodes, address),
+      transactionsSeen: nodes.length,
+      before,
+      hasOlder: Boolean(connection?.pageInfo?.hasPreviousPage && before && nodes.length),
+    };
   }
 }

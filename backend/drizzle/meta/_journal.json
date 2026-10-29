@@ -43,6 +43,13 @@
       "when": 1793284270566,
       "tag": "0005_currencies",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793285910291,
+      "tag": "0006_sui_transaction_sync",
+      "breakpoints": true
     }
   ]
 }
