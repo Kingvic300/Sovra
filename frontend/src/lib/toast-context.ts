@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
 export type ToastTone = "success" | "error" | "info";
 
@@ -7,6 +7,8 @@ export type ToastInput = {
   description?: string;
   /** Optional button, e.g. Undo. */
   action?: { label: string; onClick: () => void };
+  /** Replaces the tone icon, e.g. a wallet logo. */
+  media?: ReactNode;
   /** Milliseconds before auto-dismiss. Errors stay longer by default. */
   duration?: number;
 };

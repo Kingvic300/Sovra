@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDAppKit, useWalletConnection, type UiWallet } from "@mysten/dapp-kit-react";
+import { WalletFailedBadge } from "@/components/ui/wallet-badge";
 import { api } from "@/lib/api";
 import { AuthContext, type AuthState, type Profile, type Session } from "@/lib/auth-context";
 import { ACCOUNTS, USER_NAME } from "@/lib/demo-data";
 import { readDemoFlag, readProfile, writeDemoFlag, writeProfile } from "@/lib/profile-store";
 import { endServerSession, ensureServerSession, type ServerSession } from "@/lib/server-session";
+import { useToast } from "@/lib/toast-context";
 
 const DEMO_ADDRESS = ACCOUNTS.find((a) => a.source === "tatum")!.address!;
 
@@ -31,6 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Bumped after saving so the profile is re-read from storage.
   const [profileRevision, setProfileRevision] = useState(0);
   const [server, setServer] = useState<{ address: string; status: ServerSession } | null>(null);
+  // Bumped to ask the wallet to sign again after it declined.
+  const [attempt, setAttempt] = useState(0);
+  const toast = useToast();
+  const walletName = connection.wallet?.name ?? "your wallet";
+  const walletIcon = connection.wallet?.icon;
 
   const walletAddress = connection.isConnected && connection.account ? connection.account.address : null;
 
@@ -53,13 +60,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfileRevision((n) => n + 1);
           }
         }
-        if (!cancelled) setServer({ address: session.address, status });
+        if (cancelled) return;
+        setServer({ address: session.address, status });
+        if (status === "failed" && session.method === "wallet") {
+          toast.error({
+            title: "Sovra couldn't confirm your wallet",
+            description: `Sign the message in ${walletName} so Sovra can load your data. It's free and can't move money.`,
+            media: walletIcon ? <WalletFailedBadge icon={walletIcon} /> : undefined,
+            action: { label: "Sign again", onClick: () => setAttempt((n) => n + 1) },
+          });
+        }
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [session, dAppKit]);
+  }, [session, dAppKit, attempt, toast, walletName, walletIcon]);
 
   const serverStatus: ServerSession = !session ? "idle" : server?.address === session.address ? server.status : "checking";
 

@@ -5,8 +5,10 @@ import { Highlighter, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { Logo, Wordmark } from "@/components/shell/logo";
 import { Button } from "@/components/ui/button";
 import { Remembered } from "@/components/ui/remembered";
+import { WalletFailedBadge } from "@/components/ui/wallet-badge";
 import { useAuth } from "@/lib/auth-context";
 import { ROUTE_GUARDS_ENABLED } from "@/lib/config";
+import { useToast } from "@/lib/toast-context";
 import { useTitle } from "@/lib/use-title";
 
 const FACTS = [
@@ -21,7 +23,7 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
   const location = useLocation();
   const wallets = useWallets();
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   useTitle(mode === "signin" ? "Sign in" : "Create your account");
 
   const from = (location.state as { from?: string } | null)?.from;
@@ -30,7 +32,6 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
   }
 
   async function connect(wallet: UiWallet) {
-    setError(null);
     setBusy(wallet.name);
     try {
       await auth.signInWithWallet(wallet);
@@ -38,11 +39,15 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
       navigate("/app", { replace: true });
     } catch (e) {
       const message = e instanceof Error ? e.message.toLowerCase() : "";
-      setError(
-        message.includes("reject") || message.includes("closed") || message.includes("cancel")
-          ? `${wallet.name} didn't connect. Approve the request in your wallet to continue.`
-          : `Couldn't connect ${wallet.name}. Try again, or use the demo account.`,
-      );
+      const declined = message.includes("reject") || message.includes("closed") || message.includes("cancel");
+      toast.error({
+        title: `${wallet.name} didn't connect`,
+        description: declined
+          ? `Approve the request in ${wallet.name} to continue.`
+          : "Try again, or explore with the demo account.",
+        media: <WalletFailedBadge icon={wallet.icon} />,
+        action: { label: "Try again", onClick: () => void connect(wallet) },
+      });
     } finally {
       setBusy(null);
     }
@@ -102,12 +107,6 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
                     Slush
                   </a>{" "}
                   and reload this page.
-                </p>
-              )}
-
-              {error && (
-                <p role="alert" className="mt-3 rounded-lg bg-over-soft px-3.5 py-2.5 text-[14px] text-over">
-                  {error}
                 </p>
               )}
 

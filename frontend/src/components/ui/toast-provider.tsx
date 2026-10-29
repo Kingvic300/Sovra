@@ -6,16 +6,17 @@ import { ToastContext, type Toast, type ToastApi, type ToastInput, type ToastTon
 const MAX_VISIBLE = 4;
 const DEFAULT_MS: Record<ToastTone, number> = { success: 4000, info: 5000, error: 8000 };
 
-const TONE: Record<ToastTone, { icon: typeof Info; iconClass: string; bar: string }> = {
-  success: { icon: CircleCheck, iconClass: "text-gain", bar: "bg-gain" },
-  error: { icon: CircleAlert, iconClass: "text-over", bar: "bg-over" },
-  info: { icon: Info, iconClass: "text-cobalt", bar: "bg-cobalt" },
+const TONE: Record<ToastTone, { icon: typeof Info; tile: string; bar: string; action: string }> = {
+  success: { icon: CircleCheck, tile: "bg-gain-soft text-gain", bar: "bg-gain", action: "bg-gain-soft text-gain hover:bg-gain hover:text-white" },
+  error: { icon: CircleAlert, tile: "bg-over-soft text-over", bar: "bg-over", action: "bg-over-soft text-over hover:bg-over hover:text-white" },
+  info: { icon: Info, tile: "bg-cobalt-soft text-cobalt", bar: "bg-cobalt", action: "bg-cobalt-soft text-cobalt hover:bg-cobalt hover:text-white" },
 };
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
-  const { icon: Icon, iconClass, bar } = TONE[toast.tone];
+  const { icon: Icon, tile, bar, action } = TONE[toast.tone];
   const [paused, setPaused] = useState(false);
-  const remaining = useRef(toast.duration ?? DEFAULT_MS[toast.tone]);
+  const [duration] = useState(() => toast.duration ?? DEFAULT_MS[toast.tone]);
+  const remaining = useRef(duration);
   const startedAt = useRef(0);
 
   // Auto-dismiss, pausing while the pointer or focus is on the toast.
@@ -36,34 +37,45 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       onPointerLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
-      className="pointer-events-auto relative flex w-full gap-3 overflow-hidden rounded-xl bg-card py-3.5 pr-3 pl-4 shadow-pop ring-1 ring-line motion-safe:animate-[toast-in_180ms_ease-out]"
+      className="pointer-events-auto relative w-full overflow-hidden rounded-2xl bg-card shadow-pop ring-1 ring-line motion-safe:animate-[toast-in_180ms_ease-out]"
     >
-      <span className={`absolute inset-y-0 left-0 w-1 ${bar}`} aria-hidden />
-      <Icon className={`mt-0.5 size-5 shrink-0 ${iconClass}`} aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold">{toast.title}</p>
-        {toast.description && <p className="mt-0.5 text-[14px] text-muted">{toast.description}</p>}
-        {toast.action && (
-          <button
-            type="button"
-            onClick={() => {
-              toast.action!.onClick();
-              onDismiss();
-            }}
-            className="mt-2 text-[14px] font-semibold text-cobalt hover:underline"
-          >
-            {toast.action.label}
-          </button>
+      <div className="flex items-start gap-3 py-3.5 pr-2.5 pl-3.5">
+        {toast.media ?? (
+          <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${tile}`} aria-hidden>
+            <Icon className="size-5" />
+          </span>
         )}
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="leading-snug font-semibold">{toast.title}</p>
+          {toast.description && <p className="mt-0.5 text-[14px] leading-snug text-muted">{toast.description}</p>}
+          {toast.action && (
+            <button
+              type="button"
+              onClick={() => {
+                toast.action!.onClick();
+                onDismiss();
+              }}
+              className={`mt-2.5 inline-flex h-8 items-center rounded-full px-3.5 text-[13px] font-semibold transition-colors pointer-coarse:h-10 ${action}`}
+            >
+              {toast.action.label}
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss notification"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-muted hover:bg-porcelain hover:text-ink pointer-coarse:size-11"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss notification"
-        className="grid size-8 shrink-0 place-items-center rounded-md text-muted hover:bg-porcelain hover:text-ink pointer-coarse:size-11"
-      >
-        <X className="size-4" aria-hidden />
-      </button>
+      {/* Time left before it closes; stops while hovered or focused. */}
+      <span
+        className={`absolute inset-x-0 bottom-0 h-[3px] origin-left opacity-60 motion-reduce:hidden ${bar}`}
+        style={{ animation: `toast-timer ${duration}ms linear forwards`, animationPlayState: paused ? "paused" : "running" }}
+        aria-hidden
+      />
     </li>
   );
 }

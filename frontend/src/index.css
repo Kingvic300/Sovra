@@ -82,6 +82,15 @@
   }
 }
 
+@keyframes toast-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
