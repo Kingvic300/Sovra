@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Put, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Put, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
 import { z } from "zod";
-import { CurrentSession, type Session } from "../auth/session.js";
+import { AuthService } from "../auth/auth.service.js";
+import { CurrentSession, SESSION_COOKIE, type Session } from "../auth/session.js";
 import { SessionGuard } from "../auth/session.guard.js";
 import { ZodPipe } from "../common/zod.pipe.js";
+import { RateLimit } from "../security/rate-limit.js";
 import { CATEGORY_IDS } from "../shared/categories.js";
 import { CURRENCY_CODE } from "../shared/currency.js";
 import { MeService } from "./me.service.js";
@@ -27,10 +30,18 @@ const ProfileBody = z.object({
   currency: z.string().trim().toUpperCase().regex(CURRENCY_CODE, "currency must be an ISO 4217 code like NGN").optional(),
 });
 
+const DeleteBody = z.object({
+  /** The account address from GET /me, as explicit confirmation. */
+  confirm: z.string().min(1).max(200),
+});
+
 @Controller("me")
 @UseGuards(SessionGuard)
 export class MeController {
-  constructor(private readonly me: MeService) {}
+  constructor(
+    private readonly me: MeService,
+    private readonly auth: AuthService,
+  ) {}
 
   @Get()
   get(@CurrentSession() session: Session) {
@@ -40,5 +51,28 @@ export class MeController {
   @Put("profile")
   save(@CurrentSession() session: Session, @Body(new ZodPipe(ProfileBody)) body: z.infer<typeof ProfileBody>) {
     return this.me.save(session, body);
+  }
+
+  /** Everything Sovra stores about the user, as a JSON download. */
+  @Get("export")
+  @RateLimit("export")
+  async export(@CurrentSession() session: Session, @Res({ passthrough: true }) res: Response) {
+    const data = await this.me.exportData(session);
+    res.setHeader("Content-Disposition", `attachment; filename="sovra-export-${data.exportedAt.slice(0, 10)}.json"`);
+    return data;
+  }
+
+  /** Deletes the account and its data, then ends the session. */
+  @Delete()
+  @HttpCode(200)
+  async delete(
+    @CurrentSession() session: Session,
+    @Body(new ZodPipe(DeleteBody)) body: z.infer<typeof DeleteBody>,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.me.deleteAccount(session, body.confirm);
+    const { maxAge: _maxAge, ...options } = this.auth.cookieOptions();
+    res.clearCookie(SESSION_COOKIE, options);
+    return result;
   }
 }

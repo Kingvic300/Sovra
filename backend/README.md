@@ -57,6 +57,7 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build and tests for the backend,
 | `RATE_LIMIT_DEMO_PER_HOUR` | no | `/auth/demo` per hour per IP. Defaults to `10`. |
 | `RATE_LIMIT_ASK_PER_HOUR` | no | `/ask` per hour per user. Defaults to `30`. |
 | `RATE_LIMIT_IMPORT_PER_HOUR` | no | `/transactions/import` (previews included) per hour per user. Defaults to `30`. |
+| `RATE_LIMIT_EXPORT_PER_HOUR` | no | `/me/export` per hour per user. Defaults to `10`. |
 | `RATE_LIMIT_WALLET_SYNC_PER_HOUR` | no | `/wallet/sync` per hour per user. Defaults to `12`. |
 | `WALLET_SYNC_MAX_PAGES` | no | Pages of 50 transactions one sync reads. Defaults to `10`; longer histories continue on the next sync. |
 | `RATE_LIMIT_DEMO_ASK_PER_HOUR` | no | `/ask` per hour per IP from demo accounts, on top of the per-user limit. Defaults to `10`. |
@@ -89,6 +90,8 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | POST | `/auth/logout` | Clears the cookie |
 | GET | `/me` | Session user, saved profile (`profile: null` without a database) and `passwordEmail`, the email the account signs in with when it has a password |
 | PUT | `/me/profile` | Saves onboarding answers; new goal, limit and payday also become goal/budget rows and memories |
+| GET | `/me/export` | JSON download of everything Sovra stores for the user (see [Data export and deletion](#data-export-and-deletion)) |
+| DELETE | `/me` | `{confirm: <account address from GET /me>}` → deletes the account and all its data, clears the cookie, and lists what can't be deleted (`retained`) |
 | GET | `/wallet/*` | Refused with `409 no_wallet` for email accounts: their address is only an id that nobody holds keys for |
 | GET | `/wallet/balance` | USDC balance at the user's address: `usdc` (exact decimal string) and `amount` (number) |
 | GET | `/wallet/transactions?limit=` | Recent USDC transfers in and out (live, not stored) |
@@ -173,6 +176,16 @@ A unique key `(user, kind, ref, due_date)` makes generation idempotent: running 
 3. On an always-on host only, `JOBS_INTERVAL_MINUTES=60` runs it inside the API process. Runs never overlap. With several instances each runs it, which is harmless because the job is idempotent.
 
 To try it locally without any paid service: set `DATABASE_URL` and `CRON_SECRET`, then `curl -X POST -H "Authorization: Bearer $CRON_SECRET" localhost:8787/api/internal/jobs/run`.
+
+## Data export and deletion
+
+**Export.** `GET /me/export` returns `{format: "sovra-export", version: 1, exportedAt, account, data, notes}` as a download. `account` is the user row without the password hash. `data` has every row of every user-data table: profiles, accounts, transactions (with the original CSV row), category rules, budgets, goals, memories (forgotten ones included, with `forgottenAt` set), Ask history, recurring pause state, budget suggestion decisions and reminders. Amounts are exact decimal strings. The tables come from one list, `USER_DATA_TABLES` in `src/me/user-data.ts`, and a test fails if a table with a `user_address` column is added to the schema without being listed there. Limited to `RATE_LIMIT_EXPORT_PER_HOUR` (default 10) per user.
+
+**Deletion.** `DELETE /me` with `{confirm: "<address>"}` (the address from `GET /me`, so nothing is deleted by accident) deletes, in one transaction, the user row and every user-data row (`ON DELETE CASCADE`), plus any pending sign-in challenges for the address. It then clears the session cookie. The response counts what was removed per table.
+
+- **Old sessions.** `SessionGuard` checks that the session's account still exists on every request, so a cookie from before the deletion, on this device or another, gets `401` before any route runs. It can't write anything or re-create the account. Signing in again with the same wallet or email starts a new, empty account.
+- **Walrus memories.** Walrus Memory has no delete, so encrypted copies stay on Walrus until their storage period ends. Recall only returns memories that still have a live, unforgotten row in Sovra's index, so forgotten memories, and memories of a deleted account, are never recalled or used again, even if the same wallet signs in later.
+- **What can't be deleted** is listed in the response's `retained`: those Walrus copies, public Sui transactions (Sovra only read them), and questions already sent to Groq (Groq's retention applies). The frontend's Privacy page should say the same; that's frontend copy for #13.
 
 ## Demo accounts
 
