@@ -42,6 +42,8 @@ const EnvSchema = z.object({
   RATE_LIMIT_ASK_PER_HOUR: positiveInt(30),
   /** Statement uploads (previews included) per hour per user. Imports may call the AI model. */
   RATE_LIMIT_IMPORT_PER_HOUR: positiveInt(30),
+  /** Data exports per hour per user. Each one reads every table for the user. */
+  RATE_LIMIT_EXPORT_PER_HOUR: positiveInt(10),
   /** Sui wallet syncs per hour per user. Each sync reads up to WALLET_SYNC_MAX_PAGES pages from Tatum. */
   RATE_LIMIT_WALLET_SYNC_PER_HOUR: positiveInt(12),
   /** Pages of 50 transactions read per wallet sync; the next sync continues from where this one stopped. */

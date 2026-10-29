@@ -113,14 +113,19 @@ export class MemwalService implements OnModuleDestroy {
       : [];
     const byBlob = new Map(indexed.map((m) => [m.blobId, m]));
 
+    // Only memories with a live index row count: forgotten ones, and ones whose index was deleted
+    // with an account, stay on Walrus until their storage ends but must never be used again.
     const hits = result.results
-      .filter((r) => !byBlob.get(r.blob_id)?.forgottenAt)
+      .filter((r) => {
+        const local = byBlob.get(r.blob_id);
+        return local !== undefined && local.forgottenAt === null;
+      })
       .slice(0, limit)
       .map((r) => {
         const match = TAG.exec(r.text);
         const local = byBlob.get(r.blob_id);
         return {
-          id: local?.id ?? null,
+          id: local!.id,
           blobId: r.blob_id,
           kind: (match?.[1] as MemoryKind | undefined) ?? local?.kind ?? null,
           text: r.text.replace(TAG, ""),
