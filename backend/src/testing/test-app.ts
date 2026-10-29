@@ -3,7 +3,7 @@ import { Logger, type INestApplication } from "@nestjs/common";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { Test } from "@nestjs/testing";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { AI_PROVIDER, type AiProvider, type AnswerInput, type MerchantToCategorize } from "../ai/ai.provider.js";
+import { AI_PROVIDER, type AiProvider, type AnswerInput, type ExtractedTransaction, type MerchantToCategorize } from "../ai/ai.provider.js";
 import { AppModule } from "../app.module.js";
 import { configureApp } from "../app.setup.js";
 import { SESSION_COOKIE } from "../auth/session.js";
@@ -50,6 +50,16 @@ export class FakeAi implements AiProvider {
     this.answers.push(input);
     if (this.failure) throw this.failure;
     return { text: `Answer to: ${input.question}`, model: "fake-model" };
+  }
+
+  readonly extracted: string[] = [];
+  /** Rows `extractTransactions` returns; tests set them to stand in for a PDF statement. */
+  statementRows: ExtractedTransaction[] = [];
+
+  async extractTransactions(statementText: string) {
+    this.extracted.push(statementText);
+    if (this.failure) throw this.failure;
+    return this.statementRows;
   }
 }
 

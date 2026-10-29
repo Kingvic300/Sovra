@@ -3,10 +3,14 @@ import { z } from "zod";
 import { AppError, notConfigured } from "../common/errors.js";
 import { ENV, type Env } from "../config/env.js";
 import { CATEGORY_IDS, CATEGORY_LABELS, type CategoryId } from "../shared/categories.js";
-import type { AiProvider, AnswerInput, MerchantToCategorize } from "./ai.provider.js";
+import type { AiProvider, AnswerInput, ExtractedTransaction, MerchantToCategorize } from "./ai.provider.js";
 
 const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
 const TIMEOUT_MS = 30_000;
+/** Reading a whole statement takes longer than an answer. */
+const EXTRACT_TIMEOUT_MS = 90_000;
+/** About 15 pages of statement text; longer PDFs are cut here. */
+const EXTRACT_MAX_CHARS = 48_000;
 const CATEGORIZE_BATCH = 60;
 /** Larger statements fall back to keyword rules for the remainder. */
 const CATEGORIZE_MAX_MERCHANTS = 300;
@@ -20,6 +24,7 @@ type ChatOptions = {
   temperature: number;
   reasoningEffort: "low" | "medium" | "high";
   jsonSchema?: { name: string; schema: Record<string, unknown> };
+  timeoutMs?: number;
 };
 
 const ChatResponse = z.object({
@@ -64,6 +69,47 @@ const categorizeSchema = {
 
 const CategorizeResult = z.object({
   items: z.array(z.object({ merchantKey: z.string(), category: z.enum(CATEGORY_IDS) })),
+});
+
+const EXTRACT_PROMPT = `You read bank statements that were converted from PDF to plain text.
+List every transaction in the text, in the order it appears. For each one give:
+- date as YYYY-MM-DD (use the statement's year when a row shows only day and month),
+- description: the merchant or payee text, without reference numbers where you can tell,
+- amount as a signed number: negative for money out (debits, withdrawals, card payments), positive for money in,
+- balance: the running balance printed after that row, or null when the statement doesn't show one.
+Skip opening and closing balance lines, totals, interest summaries and page headers. Never invent rows.`;
+
+const extractSchema = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          date: { type: "string" },
+          description: { type: "string" },
+          amount: { type: "number" },
+          balance: { type: ["number", "null"] },
+        },
+        required: ["date", "description", "amount", "balance"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["items"],
+  additionalProperties: false,
+};
+
+const ExtractResult = z.object({
+  items: z.array(
+    z.object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      description: z.string().trim().min(1).max(200),
+      amount: z.number().finite(),
+      balance: z.number().finite().nullable(),
+    }),
+  ),
 });
 
 /** Groq chat completions (OpenAI-compatible). GPT-OSS models: reasoning stays out of the response. */
@@ -140,6 +186,24 @@ export class GroqAiProvider implements AiProvider {
     return out;
   }
 
+  async extractTransactions(statementText: string): Promise<ExtractedTransaction[]> {
+    const result = await this.chat({
+      model: this.env.GROQ_MODEL,
+      messages: [
+        { role: "system", content: EXTRACT_PROMPT },
+        { role: "user", content: statementText.slice(0, EXTRACT_MAX_CHARS) },
+      ],
+      maxTokens: 16_384,
+      temperature: 0,
+      reasoningEffort: "low",
+      jsonSchema: { name: "statement_transactions", schema: extractSchema },
+      timeoutMs: EXTRACT_TIMEOUT_MS,
+    });
+    const parsed = ExtractResult.safeParse(JSON.parse(result.content || "null"));
+    if (!parsed.success) throw upstreamError("Sovra couldn't read the transactions in that PDF. Try a CSV or Excel export.");
+    return parsed.data.items.filter((t) => t.amount !== 0);
+  }
+
   private async chat(options: ChatOptions): Promise<{ content: string; model: string }> {
     const key = this.env.GROQ_API_KEY;
     if (!key) throw notConfigured("Groq (GROQ_API_KEY)");
@@ -165,7 +229,7 @@ export class GroqAiProvider implements AiProvider {
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS),
       });
     } catch (err) {
       const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");

@@ -183,14 +183,18 @@ describe("user data routes", () => {
       assert.equal((await database.db.select().from(categoryRules).where(eq(categoryRules.userAddress, address))).length, 0);
     });
 
-    it("rejects missing, non-CSV and unreadable files", async () => {
+    it("rejects missing, unsupported and unreadable files", async () => {
       const { client } = await newUser();
       const missing = await client.request("POST", "/transactions/import", { form: new FormData() });
       assert.equal(missing.body.error.code, "file_missing");
 
-      const form = new FormData();
-      form.append("file", new Blob(["%PDF"], { type: "application/pdf" }), "statement.pdf");
-      assert.equal((await client.request("POST", "/transactions/import", { form })).body.error.code, "unsupported_file");
+      const word = new FormData();
+      word.append("file", new Blob(["hello"], { type: "application/msword" }), "statement.docx");
+      assert.equal((await client.request("POST", "/transactions/import", { form: word })).body.error.code, "unsupported_file");
+
+      const brokenPdf = new FormData();
+      brokenPdf.append("file", new Blob(["%PDF"], { type: "application/pdf" }), "statement.pdf");
+      assert.equal((await client.request("POST", "/transactions/import", { form: brokenPdf })).body.error.code, "unreadable_file");
 
       const noColumns = await client.request("POST", "/transactions/import", { form: csvForm("Foo,Bar\n1,2") });
       assert.equal(noColumns.status, 400);

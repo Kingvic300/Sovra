@@ -19,6 +19,7 @@ import { badRequest } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { RateLimit } from "../security/rate-limit.js";
 import { CATEGORY_IDS } from "../shared/categories.js";
+import { statementFormat, StatementReaderService } from "./statement-reader.service.js";
 import { TransactionsService } from "./transactions.service.js";
 
 const MAX_CSV_BYTES = 5 * 1024 * 1024;
@@ -41,30 +42,37 @@ const PatchBody = z.object({ category: z.enum(CATEGORY_IDS), remember: z.boolean
 @Controller("transactions")
 @UseGuards(SessionGuard)
 export class TransactionsController {
-  constructor(private readonly txs: TransactionsService) {}
+  constructor(
+    private readonly txs: TransactionsService,
+    private readonly statements: StatementReaderService,
+  ) {}
 
   @Get()
   async list(@CurrentSession() s: Session, @Query(new ZodPipe(ListQuery)) q: z.infer<typeof ListQuery>) {
     return { transactions: await this.txs.list(s.address, q) };
   }
 
-  /** multipart/form-data with a `file` field. Add `?preview=1` to check the columns without saving. */
+  /**
+   * multipart/form-data with a `file` field: a CSV, an Excel workbook (.xlsx) or a PDF statement.
+   * Add `?preview=1` to check the columns without saving.
+   */
   @Post("import")
   @RateLimit("import")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_CSV_BYTES } }))
-  import(
+  async import(
     @CurrentSession() s: Session,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Query(new ZodPipe(ImportQuery)) q: z.infer<typeof ImportQuery>,
     @Body(new ZodPipe(ImportBody)) body: z.infer<typeof ImportBody>,
   ) {
     if (!file) throw badRequest("Attach the statement as a `file` field.", "file_missing");
-    if (!/\.csv$/i.test(file.originalname) && !/csv|text\/plain/.test(file.mimetype)) {
-      throw badRequest("Only CSV statements are supported.", "unsupported_file");
-    }
+    const upload = { buffer: file.buffer, filename: file.originalname, mimetype: file.mimetype };
+    if (!statementFormat(upload)) throw badRequest("Upload a CSV, Excel (.xlsx) or PDF statement.", "unsupported_file");
+    // Demo accounts never call the AI model, so they can't import PDFs.
+    const content = await this.statements.toCsv(upload, { allowAi: s.method !== "demo" });
     return this.txs.importCsv(
       s,
-      { content: file.buffer.toString("utf8"), filename: file.originalname },
+      { content, filename: file.originalname },
       { preview: q.preview, dateOrder: q.dateOrder, accountName: body.accountName },
     );
   }

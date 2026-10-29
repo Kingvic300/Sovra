@@ -77,10 +77,11 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | POST | `/auth/nonce` | `{address}` → `{message, expiresAt}`: the text to sign |
 | POST | `/auth/verify` | `{address, message, signature, name?, email?}` → checks the wallet signature, sets the cookie |
 | POST | `/auth/signup` | `{email, password, name?}` → creates an email account (password at least 8 characters, stored as a scrypt hash) and sets the cookie. `409 email_taken` if the email has an account |
-| POST | `/auth/login` | `{email, password}` → sets the cookie. A wrong password and an unknown email get the same `401` |
+| POST | `/auth/login` | `{email, password}` → sets the cookie, for email accounts and for wallet accounts that added email sign-in. A wrong password and an unknown email get the same `401` |
+| POST | `/auth/password` | Signed in with a wallet: `{email, password}` adds email sign-in to the account, or changes it. Logging in with that email then opens the same wallet account. `409 email_taken` if another account uses the email |
 | POST | `/auth/demo` | Creates a fresh demo account with sample data and starts its session (see [Demo accounts](#demo-accounts)) |
 | POST | `/auth/logout` | Clears the cookie |
-| GET | `/me` | Session user and saved profile (`profile: null` without a database) |
+| GET | `/me` | Session user, saved profile (`profile: null` without a database) and `passwordEmail`, the email the account signs in with when it has a password |
 | PUT | `/me/profile` | Saves onboarding answers; new goal, limit and payday also become goal/budget rows and memories |
 | GET | `/wallet/*` | Refused with `409 no_wallet` for email accounts: their address is only an id that nobody holds keys for |
 | GET | `/wallet/balance` | USDC balance at the user's address: `usdc` (exact decimal string) and `amount` (number) |
@@ -95,7 +96,7 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | PATCH | `/accounts/:id` | `{name?, balance?}`; `balance: null` marks it unknown |
 | DELETE | `/accounts/:id` | Deletes the account and the transactions imported into it |
 | GET | `/transactions?month=&category=&limit=` | Transactions, newest first |
-| POST | `/transactions/import?preview=1&dateOrder=dmy` | Multipart CSV `file` (+ optional `accountName`). With `preview=1` nothing is saved. When the CSV has a balance column, the balance after its latest row becomes the account balance (`closingBalance` in the preview). On import, merchants without a learned rule are categorized by Groq when configured; the response's `categorizedBy` counts rules, AI and keyword fallbacks |
+| POST | `/transactions/import?preview=1&dateOrder=dmy` | Multipart `file`: a CSV, an Excel workbook (`.xlsx`, the first table with a date column) or a PDF (its text is read into rows by the AI model; not for demo accounts, and read once for a preview and the import that follows) (+ optional `accountName`). With `preview=1` nothing is saved. When the CSV has a balance column, the balance after its latest row becomes the account balance (`closingBalance` in the preview). On import, merchants without a learned rule are categorized by Groq when configured; the response's `categorizedBy` counts rules, AI and keyword fallbacks |
 | PATCH | `/transactions/:id` | `{category, remember}`. With `remember: true` it saves a merchant rule, recategorizes that merchant and writes a memory |
 | GET | `/budgets?month=` | Limits with spending for the month |
 | PUT | `/budgets/:category` | `{limit}` |

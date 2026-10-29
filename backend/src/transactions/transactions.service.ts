@@ -90,7 +90,7 @@ export class TransactionsService {
       .values({
         userAddress: session.address,
         kind: "csv",
-        name: options.accountName?.trim() || file.filename.replace(/\.csv$/i, ""),
+        name: options.accountName?.trim() || file.filename.replace(/\.(csv|xlsx|pdf)$/i, ""),
         balance: parsed.closingBalance == null ? null : parsed.closingBalance.toFixed(2),
         syncedAt: new Date(),
       })
