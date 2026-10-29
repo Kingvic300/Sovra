@@ -4,6 +4,7 @@ import { CurrentSession, type Session } from "../auth/session.js";
 import { SessionGuard } from "../auth/session.guard.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { CATEGORY_IDS } from "../shared/categories.js";
+import { CURRENCY_CODE } from "../shared/currency.js";
 import { MeService } from "./me.service.js";
 
 const ProfileBody = z.object({
@@ -22,6 +23,8 @@ const ProfileBody = z.object({
     .nullish(),
   payday: z.union([z.number().int().min(1).max(31), z.literal("irregular")]).nullish(),
   sources: z.object({ csv: z.boolean(), sui: z.boolean() }),
+  /** ISO 4217, e.g. "NGN". Left out by older clients, which keeps the saved one. */
+  currency: z.string().trim().toUpperCase().regex(CURRENCY_CODE, "currency must be an ISO 4217 code like NGN").optional(),
 });
 
 @Controller("me")

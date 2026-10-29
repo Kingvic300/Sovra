@@ -53,7 +53,7 @@ describe("user data routes", () => {
       const { client, address } = await newUser();
       const res = await client.put("/me/profile", profile);
       assert.equal(res.status, 200);
-      assert.deepEqual(res.body.profile, profile);
+      assert.deepEqual(res.body.profile, { ...profile, currency: "USD" });
       // Walrus Memory isn't configured, so memories are reported as skipped rather than failing the save.
       assert.deepEqual(
         res.body.memories.map((m: { kind: string; status: string }) => [m.kind, m.status]),
@@ -65,7 +65,7 @@ describe("user data routes", () => {
       );
 
       const me = await client.get("/me");
-      assert.deepEqual(me.body.profile, profile);
+      assert.deepEqual(me.body.profile, { ...profile, currency: "USD" });
       assert.equal((await database.db.select().from(goals).where(eq(goals.userAddress, address))).length, 1);
       const [budget] = await database.db.select().from(budgets).where(eq(budgets.userAddress, address));
       assert.deepEqual({ category: budget.category, limit: budget.limit }, { category: "entertainment", limit: "100.00" });

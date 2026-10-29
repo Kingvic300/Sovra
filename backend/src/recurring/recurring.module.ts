@@ -3,7 +3,9 @@ import { and, asc, eq, gte, lt } from "drizzle-orm";
 import { CurrentSession, type Session } from "../auth/session.js";
 import { SessionGuard } from "../auth/session.guard.js";
 import { DatabaseService } from "../database/database.service.js";
-import { transactions } from "../database/schema.js";
+import { accounts, transactions } from "../database/schema.js";
+import { CurrencyService } from "../fx/currency.service.js";
+import { FxService } from "../fx/fx.service.js";
 
 const DAY = 86_400_000;
 const LOOKBACK_DAYS = 120;
@@ -71,13 +73,28 @@ export function detectRecurring(rows: { date: string; merchant: string; merchant
 
 @Injectable()
 export class RecurringService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly fx: FxService,
+    private readonly currencies: CurrencyService,
+  ) {}
 
+  /** Repeating charges with amounts in the user's currency, so they line up with budgets. */
   async list(address: string) {
     const today = Date.now();
+    const currency = await this.currencies.forUser(address);
+    const { convert } = await this.fx.converterTo(currency);
     const rows = await this.database.db
-      .select()
+      .select({
+        date: transactions.date,
+        merchant: transactions.merchant,
+        merchantKey: transactions.merchantKey,
+        category: transactions.category,
+        amount: transactions.amount,
+        currency: accounts.currency,
+      })
       .from(transactions)
+      .leftJoin(accounts, eq(accounts.id, transactions.accountId))
       .where(
         and(
           eq(transactions.userAddress, address),
@@ -86,7 +103,12 @@ export class RecurringService {
         ),
       )
       .orderBy(asc(transactions.date));
-    return detectRecurring(rows.map((r) => ({ ...r, amount: Number(r.amount) })));
+    // Charges in a currency with no rate today can't be compared, so they're left out rather than guessed.
+    const converted = rows.flatMap((r) => {
+      const amount = convert(Number(r.amount), r.currency);
+      return amount === null ? [] : [{ ...r, amount }];
+    });
+    return detectRecurring(converted).map((r) => ({ ...r, currency }));
   }
 }
 

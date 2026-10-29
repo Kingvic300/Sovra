@@ -9,6 +9,7 @@ import { configureApp } from "../app.setup.js";
 import { SESSION_COOKIE } from "../auth/session.js";
 import { ENV, loadEnv } from "../config/env.js";
 import { DatabaseService } from "../database/database.service.js";
+import { FxService, type FxRates } from "../fx/fx.service.js";
 import { MemwalService } from "../memory/memwal.service.js";
 import { upstreamFailed } from "../common/errors.js";
 import type { CategoryId } from "../shared/categories.js";
@@ -60,6 +61,21 @@ export class FakeAi implements AiProvider {
     this.extracted.push(statementText);
     if (this.failure) throw this.failure;
     return this.statementRows;
+  }
+}
+
+/** Fixed daily rates (units per 1 USD), so tests never call the rates API. `null` acts like an outage. */
+export class FakeFx extends FxService {
+  constructor(public value: FxRates | null = { date: "2026-10-29", rates: { USD: 1, NGN: 1500, EUR: 0.9, GBP: 0.8 } }) {
+    super();
+  }
+
+  protected override async fetchRates() {
+    return this.value;
+  }
+
+  override async rates() {
+    return this.value;
   }
 }
 
@@ -128,14 +144,25 @@ export type TestApp = {
  * External services are off unless a fake is passed, so tests never call Groq, Walrus or Tatum.
  */
 export async function createTestApp(
-  options: { database?: TestDatabase; ai?: AiProvider; memwal?: FakeMemWal; tatum?: FakeTatum; env?: Record<string, string> } = {},
+  options: {
+    database?: TestDatabase;
+    ai?: AiProvider;
+    memwal?: FakeMemWal;
+    tatum?: FakeTatum;
+    fx?: FakeFx;
+    env?: Record<string, string>;
+  } = {},
 ): Promise<TestApp> {
   // Set TEST_LOGS=1 to see server-side errors while debugging a test.
   const logger = process.env.TEST_LOGS ? (["error", "warn"] as const) : false;
   Logger.overrideLogger(logger ? [...logger] : false);
   const env = loadEnv({ NODE_ENV: "test", SESSION_SECRET: TEST_SESSION_SECRET, ...GENEROUS_RATE_LIMITS, ...options.env });
 
-  let builder = Test.createTestingModule({ imports: [AppModule] }).overrideProvider(ENV).useValue(env);
+  let builder = Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(ENV)
+    .useValue(env)
+    .overrideProvider(FxService)
+    .useValue(options.fx ?? new FakeFx());
   if (options.database) builder = builder.overrideProvider(DatabaseService).useValue(options.database.service);
   if (options.ai) builder = builder.overrideProvider(AI_PROVIDER).useValue(options.ai);
   if (options.tatum) builder = builder.overrideProvider(TatumService).useValue(options.tatum);

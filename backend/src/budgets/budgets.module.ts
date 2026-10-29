@@ -6,7 +6,9 @@ import { SessionGuard } from "../auth/session.guard.js";
 import { notFound } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { DatabaseService } from "../database/database.service.js";
-import { budgets, transactions, users } from "../database/schema.js";
+import { accounts, budgets, transactions, users } from "../database/schema.js";
+import { CurrencyService } from "../fx/currency.service.js";
+import { FxService } from "../fx/fx.service.js";
 import { CATEGORY_IDS, CATEGORY_LABELS, type CategoryId } from "../shared/categories.js";
 import { monthRange } from "../transactions/transactions.service.js";
 
@@ -14,16 +16,31 @@ const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 @Injectable()
 export class BudgetsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly fx: FxService,
+    private readonly currencies: CurrencyService,
+  ) {}
 
-  /** Limits for each category with what has been spent in `month`. */
+  /**
+   * Limits for each category with what has been spent in `month`, in the user's currency.
+   * Spending in accounts with another currency is converted at the day's rate; without a rate it
+   * can't be compared with the limit, so it is left out and counted in `unconverted`.
+   */
   async list(address: string, month: string) {
     const db = this.database.db;
     const { from, to } = monthRange(month);
+    const currency = await this.currencies.forUser(address);
+    const { convert } = await this.fx.converterTo(currency);
     const limits = await db.select().from(budgets).where(eq(budgets.userAddress, address));
     const spentRows = await db
-      .select({ category: transactions.category, spent: sql<string>`coalesce(sum(-${transactions.amount}), 0)` })
+      .select({
+        category: transactions.category,
+        currency: accounts.currency,
+        spent: sql<string>`coalesce(sum(-${transactions.amount}), 0)`,
+      })
       .from(transactions)
+      .leftJoin(accounts, eq(accounts.id, transactions.accountId))
       .where(
         and(
           eq(transactions.userAddress, address),
@@ -32,11 +49,19 @@ export class BudgetsService {
           lt(transactions.amount, "0"),
         ),
       )
-      .groupBy(transactions.category);
-    const spent = new Map(spentRows.map((r) => [r.category, Number(r.spent)]));
+      .groupBy(transactions.category, accounts.currency);
+    const spent = new Map<string, number>();
+    let unconverted = 0;
+    for (const r of spentRows) {
+      const value = convert(Number(r.spent), r.currency);
+      if (value === null) unconverted++;
+      else spent.set(r.category, Math.round(((spent.get(r.category) ?? 0) + value) * 100) / 100);
+    }
 
     return {
       month,
+      currency,
+      unconverted,
       budgets: limits.map((b) => ({
         category: b.category,
         label: CATEGORY_LABELS[b.category as CategoryId] ?? b.category,

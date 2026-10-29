@@ -38,6 +38,8 @@ export const profiles = pgTable("profiles", {
   limit: jsonb("limit").$type<LimitJson | null>(),
   /** Day of month as a string ("25") or "irregular". */
   payday: text("payday"),
+  /** ISO 4217 code everything is shown and converted in. Null on profiles saved before currencies: USD. */
+  currency: text("currency"),
   sources: jsonb("sources").$type<SourcesJson>().notNull().default({ csv: false, sui: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -52,6 +54,8 @@ export const accounts = pgTable(
     kind: text("kind", { enum: ["csv", "sui"] }).notNull(),
     name: text("name").notNull(),
     balance: numeric("balance", { precision: 14, scale: 2 }),
+    /** ISO 4217 code of this account's amounts and balance. Null: the user's currency. */
+    currency: text("currency"),
     syncedAt: timestamp("synced_at", { withTimezone: true }),
   },
   (t) => [index("accounts_user_idx").on(t.userAddress)],

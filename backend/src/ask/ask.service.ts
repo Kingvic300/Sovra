@@ -5,7 +5,8 @@ import type { Session } from "../auth/session.js";
 import { badRequest, notConfigured } from "../common/errors.js";
 import { BudgetsService } from "../budgets/budgets.module.js";
 import { DatabaseService } from "../database/database.service.js";
-import { askMessages, profiles } from "../database/schema.js";
+import { accounts, askMessages, profiles } from "../database/schema.js";
+import { CurrencyService } from "../fx/currency.service.js";
 import { GoalsService } from "../goals/goals.module.js";
 import { MemwalService } from "../memory/memwal.service.js";
 import { RecurringService } from "../recurring/recurring.module.js";
@@ -29,6 +30,7 @@ export class AskService {
     private readonly recurring: RecurringService,
     private readonly transactions: TransactionsService,
     private readonly tatum: TatumService,
+    private readonly currencies: CurrencyService,
   ) {}
 
   /**
@@ -80,12 +82,29 @@ export class AskService {
       ),
     ]);
 
+    // Budgets, goals and bills are in the user's currency; transactions keep their account's.
+    const currency = await this.currencies.forUser(session.address);
+    context.currency = currency;
+    const accountCurrency = new Map<string, string>();
+    if (recent && db) {
+      const rows = await this.database.db
+        .select({ id: accounts.id, currency: accounts.currency })
+        .from(accounts)
+        .where(eq(accounts.userAddress, session.address));
+      for (const r of rows) accountCurrency.set(r.id, r.currency ?? currency);
+    }
     if (profile) context.profile = profile;
     if (wallet) context.suiWalletUsdc = wallet.usdc;
     if (budgets) context.budgetsThisMonth = budgets.budgets.map(({ label, limit, spent }) => ({ label, limit, spent }));
     if (goals) context.goals = goals.map(({ name, target, saved, due, weekly }) => ({ name, target, saved, due, weekly }));
     if (recent) {
-      context.recentTransactions = recent.map(({ date, merchant, category, amount }) => ({ date, merchant, category, amount }));
+      context.recentTransactions = recent.map(({ date, merchant, category, amount, accountId }) => ({
+        date,
+        merchant,
+        category,
+        amount,
+        currency: accountCurrency.get(accountId ?? "") ?? currency,
+      }));
     }
     if (upcoming) {
       context.upcomingBills = upcoming.map(({ merchant, amount, nextDate, cadence }) => ({ merchant, amount, nextDate, cadence }));

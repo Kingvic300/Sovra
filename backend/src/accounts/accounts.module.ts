@@ -7,6 +7,8 @@ import { notFound } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { DatabaseService } from "../database/database.service.js";
 import { accounts, transactions } from "../database/schema.js";
+import { CurrencyService } from "../fx/currency.service.js";
+import { FX_SOURCE, FxService } from "../fx/fx.service.js";
 import { TatumService } from "../wallet/tatum.service.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 
@@ -33,10 +35,16 @@ export class AccountsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly tatum: TatumService,
+    private readonly fx: FxService,
+    private readonly currencies: CurrencyService,
   ) {}
 
-  /** The user's accounts with how many transactions each holds. Balances are null when unknown, never guessed. */
-  async list(address: string) {
+  /**
+   * The user's accounts with how many transactions each holds, each in its own currency.
+   * Balances are null when unknown, never guessed.
+   */
+  async list(address: string, userCurrency?: string) {
+    const currency = userCurrency ?? (await this.currencies.forUser(address));
     const rows = await this.database.db
       .select({
         ...getTableColumns(accounts),
@@ -53,6 +61,7 @@ export class AccountsService {
       kind: a.kind,
       name: a.name,
       balance: a.balance == null ? null : Number(a.balance),
+      currency: a.currency ?? currency,
       syncedAt: a.syncedAt?.toISOString() ?? null,
       transactionCount: Number(a.transactionCount),
       lastTransactionDate: a.lastTransactionDate ?? null,
@@ -75,53 +84,68 @@ export class AccountsService {
   }
 
   /**
-   * Total balance and a 30-day trend. The total adds accounts with a known balance and the live
-   * Sui balance; anything that couldn't be counted is listed in `missing` instead of being guessed.
-   * The trend covers accounts with a known balance and works backwards from it: the balance at
-   * the end of a day is today's balance minus every transaction dated after that day.
+   * Total balance and a 30-day trend in the user's currency. Accounts in other currencies, and the
+   * USDC wallet, are converted with the day's rate. Anything that couldn't be counted (unknown
+   * balance, no rate for its currency, wallet not read) is listed in `missing` instead of being guessed.
+   * The trend works backwards from today's balances: the balance at the end of a day is today's
+   * balance minus every transaction dated after that day.
    */
   async summary(session: Session, now = new Date()) {
-    const [list, wallet] = await Promise.all([this.list(session.address), this.wallet(session)]);
-    const known = list.filter((a): a is typeof a & { balance: number } => a.balance !== null);
-    const missing = [
-      ...list.filter((a) => a.balance === null).map((a) => ({ id: a.id, name: a.name, reason: "balance_unknown" as const })),
-      ...(wallet.status === "live" ? [] : [{ id: null, name: "Sui wallet", reason: wallet.status }]),
-    ];
+    const currency = await this.currencies.forUser(session.address);
+    const [list, wallet, { fx, convert }] = await Promise.all([
+      this.list(session.address, currency),
+      this.wallet(session),
+      this.fx.converterTo(currency),
+    ]);
+    const counted: { id: string; balance: number; currency: string }[] = [];
+    const missing: { id: string | null; name: string; reason: string }[] = [];
+    for (const a of list) {
+      if (a.balance === null) missing.push({ id: a.id, name: a.name, reason: "balance_unknown" });
+      else if (convert(a.balance, a.currency) === null) missing.push({ id: a.id, name: a.name, reason: "no_rate" });
+      else counted.push({ id: a.id, balance: a.balance, currency: a.currency });
+    }
+    const walletValue = wallet.usdc === null ? null : convert(wallet.usdc, "USD");
+    if (wallet.status !== "live") missing.push({ id: null, name: "Sui wallet", reason: wallet.status });
+    else if (walletValue === null) missing.push({ id: null, name: "Sui wallet", reason: "no_rate" });
 
-    const banks = known.reduce((sum, a) => sum + a.balance, 0);
-    const total = known.length || wallet.usdc !== null ? cents(banks + (wallet.usdc ?? 0)) : null;
+    const banks = counted.reduce((sum, a) => sum + convert(a.balance, a.currency)!, 0);
+    const total = counted.length || walletValue !== null ? cents(banks + (walletValue ?? 0)) : null;
 
     const days = Array.from({ length: TREND_DAYS }, (_, i) => isoDay(now.getTime() - (TREND_DAYS - 1 - i) * DAY));
     let trend: { date: string; balance: number }[] = [];
-    if (known.length) {
+    if (counted.length) {
       const moves = await this.database.db
-        .select({ date: transactions.date, amount: sql<string>`sum(${transactions.amount})` })
+        .select({ date: transactions.date, accountId: transactions.accountId, amount: sql<string>`sum(${transactions.amount})` })
         .from(transactions)
         .where(
           and(
             eq(transactions.userAddress, session.address),
             inArray(
               transactions.accountId,
-              known.map((a) => a.id),
+              counted.map((a) => a.id),
             ),
             gt(transactions.date, days[0]),
           ),
         )
-        .groupBy(transactions.date);
+        .groupBy(transactions.date, transactions.accountId);
+      const currencyOf = new Map(counted.map((a) => [a.id, a.currency]));
+      const converted = moves.map((m) => ({ date: m.date, amount: convert(Number(m.amount), currencyOf.get(m.accountId ?? "")) ?? 0 }));
       trend = days.map((day) => ({
         date: day,
-        balance: cents(banks - moves.filter((m) => m.date > day).reduce((sum, m) => sum + Number(m.amount), 0)),
+        balance: cents(banks - converted.filter((m) => m.date > day).reduce((sum, m) => sum + m.amount, 0)),
       }));
     }
 
     return {
-      currency: "USD",
+      currency,
       total,
-      banks: known.length ? cents(banks) : null,
+      banks: counted.length ? cents(banks) : null,
       wallet,
       missing,
       trend,
       change30d: trend.length ? cents(trend[trend.length - 1].balance - trend[0].balance) : null,
+      /** The rate behind converted figures: units of `currency` per 1 USD. Null when rates are unavailable. */
+      fx: fx ? { date: fx.date, perUsd: fx.rates[currency] ?? null, source: FX_SOURCE } : null,
     };
   }
 

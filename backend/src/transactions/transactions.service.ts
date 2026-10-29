@@ -1,13 +1,15 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { AI_PROVIDER, type AiProvider } from "../ai/ai.provider.js";
-import { notFound } from "../common/errors.js";
+import { badRequest, notFound } from "../common/errors.js";
 import { DatabaseService } from "../database/database.service.js";
 import { accounts, categoryRules, transactions, users } from "../database/schema.js";
 import { MemwalService } from "../memory/memwal.service.js";
 import type { Session } from "../auth/session.js";
 import type { CategoryId } from "../shared/categories.js";
+import { detectCurrency } from "../shared/currency.js";
 import { categoryRuleSentence } from "../shared/memory-text.js";
+import { CurrencyService } from "../fx/currency.service.js";
 import { CsvService, type DateOrder, type ParsedRow } from "./csv.service.js";
 
 const toApi = (t: typeof transactions.$inferSelect) => ({
@@ -42,6 +44,7 @@ export class TransactionsService {
     private readonly csv: CsvService,
     private readonly memory: MemwalService,
     @Inject(AI_PROVIDER) private readonly ai: AiProvider,
+    private readonly currencies: CurrencyService,
   ) {}
 
   async list(address: string, filter: { month?: string; category?: string; limit: number }) {
@@ -72,22 +75,38 @@ export class TransactionsService {
   async importCsv(
     session: Session,
     file: { sheets: { name: string | null; content: string }[]; filename: string },
-    options: { preview: boolean; accountName?: string; dateOrder?: DateOrder },
+    options: { preview: boolean; accountName?: string; dateOrder?: DateOrder; currency?: string },
   ) {
     const rules = this.database.available ? await this.rules(session.address) : new Map<string, CategoryId>();
+    const userCurrency = await this.currencies.forUser(session.address);
     const base = options.accountName?.trim() || file.filename.replace(/\.(csv|xlsx|pdf)$/i, "");
     const many = file.sheets.length > 1;
     const parsedSheets = file.sheets
-      .map((sheet, i) => ({
-        name: many ? accountNameForSheet(sheet.name, `${base} ${i + 1}`) : base,
-        parsed: this.csv.parse(sheet.content, rules, options.dateOrder),
-      }))
+      .map((sheet, i) => {
+        const parsed = this.csv.parse(sheet.content, rules, options.dateOrder);
+        // "Debit(₦)" or "₦1,250.00" says what currency the sheet is in; otherwise assume the user's.
+        const moneyColumns = [parsed.columns.amount, parsed.columns.debit, parsed.columns.credit, parsed.columns.balance];
+        const samples = parsed.rows.slice(0, 10).flatMap((r) => moneyColumns.map((c) => (c ? (r.raw[c] ?? "") : "")));
+        const detected = detectCurrency(Object.values(parsed.columns).filter((c): c is string => !!c), samples);
+        return {
+          name: many ? accountNameForSheet(sheet.name, `${base} ${i + 1}`) : base,
+          parsed,
+          detectedCurrency: detected,
+          currency: options.currency ?? detected ?? userCurrency,
+        };
+      })
       // A sheet whose rows are all unreadable shouldn't become an empty account; keep at least one so errors show.
       .filter((s, i, all) => s.parsed.rows.length > 0 || (i === 0 && all.every((x) => x.parsed.rows.length === 0)));
     const allRows = parsedSheets.flatMap((s) => s.parsed.rows);
     const skipped = parsedSheets.flatMap((s) => (many ? s.parsed.skipped.map((k) => ({ ...k, sheet: s.name })) : s.parsed.skipped));
     const first = parsedSheets[0].parsed;
-    const summaries = parsedSheets.map((s) => ({ name: s.name, total: s.parsed.rows.length, closingBalance: s.parsed.closingBalance }));
+    const summaries = parsedSheets.map((s) => ({
+      name: s.name,
+      total: s.parsed.rows.length,
+      closingBalance: s.parsed.closingBalance,
+      currency: s.currency,
+      detectedCurrency: s.detectedCurrency,
+    }));
 
     if (options.preview) {
       return {
@@ -96,19 +115,24 @@ export class TransactionsService {
         dateOrder: first.dateOrder,
         total: allRows.length,
         closingBalance: many ? null : first.closingBalance,
+        currency: parsedSheets[0].currency,
+        userCurrency,
         accounts: summaries,
         rows: allRows.slice(0, 20).map(({ raw: _raw, line: _line, ...row }) => row),
         skipped,
       };
     }
 
+    if (allRows.length === 0) {
+      throw badRequest("No transactions could be read from that statement, so nothing was imported.", "no_transactions");
+    }
     const db = this.database.db;
     // Demo accounts get keyword categories only, so a public demo can't run up AI costs.
     // All sheets are categorized together so a merchant seen in two of them is sent once.
     const categorizedBy = await this.refineCategories(allRows, session.method !== "demo");
     await db.insert(users).values({ address: session.address, method: session.method, name: session.name }).onConflictDoNothing();
 
-    const saved: { id: string; name: string; kind: string; balance: number | null; imported: number }[] = [];
+    const saved: { id: string; name: string; kind: string; balance: number | null; currency: string; imported: number }[] = [];
     for (const sheet of parsedSheets) {
       const [account] = await db
         .insert(accounts)
@@ -116,6 +140,7 @@ export class TransactionsService {
           userAddress: session.address,
           kind: "csv",
           name: sheet.name,
+          currency: sheet.currency,
           balance: sheet.parsed.closingBalance == null ? null : sheet.parsed.closingBalance.toFixed(2),
           syncedAt: new Date(),
         })
@@ -141,6 +166,7 @@ export class TransactionsService {
         name: account.name,
         kind: account.kind,
         balance: account.balance == null ? null : Number(account.balance),
+        currency: sheet.currency,
         imported: sheet.parsed.rows.length,
       });
     }

@@ -14,6 +14,7 @@ export type ProfileInput = {
   limit?: { category: CategoryId; amount: number } | null;
   payday?: number | "irregular" | null;
   sources: { csv: boolean; sui: boolean };
+  currency?: string;
 };
 
 /** JSON with object keys sorted. Postgres jsonb reorders keys, so plain JSON.stringify can't compare saved values. */
@@ -69,6 +70,7 @@ export class MeService {
       limit: input.limit ?? null,
       payday: input.payday == null ? null : String(input.payday),
       sources: input.sources,
+      currency: input.currency ?? previous?.currency ?? null,
       updatedAt: new Date(),
     };
     const [saved] = await db
@@ -87,14 +89,14 @@ export class MeService {
         target: String(input.goal.target),
         due: input.goal.due,
       });
-      memories.push(await this.rememberSafely(session.address, "goal", goalSentence(input.goal)));
+      memories.push(await this.rememberSafely(session.address, "goal", goalSentence(input.goal, values.currency ?? undefined)));
     }
     if (input.limit && changed(input.limit, previous?.limit)) {
       await db
         .insert(budgets)
         .values({ userAddress: session.address, category: input.limit.category, limit: String(input.limit.amount) })
         .onConflictDoUpdate({ target: [budgets.userAddress, budgets.category], set: { limit: String(input.limit.amount) } });
-      memories.push(await this.rememberSafely(session.address, "limit", limitSentence(input.limit)));
+      memories.push(await this.rememberSafely(session.address, "limit", limitSentence(input.limit, values.currency ?? undefined)));
     }
     if (input.payday != null && changed(String(input.payday), previous?.payday)) {
       memories.push(await this.rememberSafely(session.address, "preference", paydaySentence(input.payday)));
@@ -123,6 +125,7 @@ export class MeService {
       limit: p.limit ?? undefined,
       payday: p.payday == null ? undefined : p.payday === "irregular" ? "irregular" : Number(p.payday),
       sources: p.sources,
+      currency: p.currency ?? "USD",
     };
   }
 }

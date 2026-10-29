@@ -19,6 +19,7 @@ import { badRequest } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { RateLimit } from "../security/rate-limit.js";
 import { CATEGORY_IDS } from "../shared/categories.js";
+import { CURRENCY_CODE } from "../shared/currency.js";
 import { statementFormat, StatementReaderService } from "./statement-reader.service.js";
 import { TransactionsService } from "./transactions.service.js";
 
@@ -36,7 +37,11 @@ const ImportQuery = z.object({
     .transform((v) => v === "1" || v === "true"),
   dateOrder: z.enum(["dmy", "mdy"]).optional(),
 });
-const ImportBody = z.object({ accountName: z.string().trim().max(80).optional() });
+const ImportBody = z.object({
+  accountName: z.string().trim().max(80).optional(),
+  /** Overrides the currency detected from the statement, e.g. "NGN". */
+  currency: z.string().trim().toUpperCase().regex(CURRENCY_CODE).optional(),
+});
 const PatchBody = z.object({ category: z.enum(CATEGORY_IDS), remember: z.boolean().default(false) });
 
 @Controller("transactions")
@@ -73,7 +78,7 @@ export class TransactionsController {
     return this.txs.importCsv(
       s,
       { sheets: sheets.map((sheet) => ({ name: sheet.name, content: sheet.csv })), filename: file.originalname },
-      { preview: q.preview, dateOrder: q.dateOrder, accountName: body.accountName },
+      { preview: q.preview, dateOrder: q.dateOrder, accountName: body.accountName, currency: body.currency },
     );
   }
 

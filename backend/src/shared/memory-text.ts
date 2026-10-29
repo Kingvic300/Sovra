@@ -1,4 +1,5 @@
 import { CATEGORY_LABELS, type CategoryId } from "./categories.js";
+import { formatMoney } from "./currency.js";
 
 /** Memory sentences use the same wording as the frontend onboarding preview. */
 
@@ -7,21 +8,19 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const usd = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
 function ordinal(n: number) {
   const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
   return `${n}${s}`;
 }
 
-export function goalSentence(goal: { name: string; target: number; due: string }) {
+export function goalSentence(goal: { name: string; target: number; due: string }, currency?: string) {
   const month = MONTHS[Number(goal.due.slice(5, 7)) - 1] ?? goal.due;
-  return `You're saving for ${goal.name.trim().toLowerCase()}, ${usd(goal.target)} by ${month}.`;
+  return `You're saving for ${goal.name.trim().toLowerCase()}, ${formatMoney(goal.target, currency)} by ${month}.`;
 }
 
-export function limitSentence(limit: { category: CategoryId; amount: number }) {
-  return `Keep ${CATEGORY_LABELS[limit.category].toLowerCase()} under ${usd(limit.amount)} a month.`;
+export function limitSentence(limit: { category: CategoryId; amount: number }, currency?: string) {
+  return `Keep ${CATEGORY_LABELS[limit.category].toLowerCase()} under ${formatMoney(limit.amount, currency)} a month.`;
 }
 
 export function paydaySentence(payday: number | "irregular") {

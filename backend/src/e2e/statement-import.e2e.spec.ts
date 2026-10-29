@@ -99,8 +99,8 @@ describe("statement import from Excel and PDF", () => {
     assert.equal(preview.status, 201);
     assert.equal(preview.body.total, 3);
     assert.deepEqual(preview.body.accounts, [
-      { name: "Wallet Account", total: 2, closingBalance: 43.8 },
-      { name: "Savings Account", total: 1, closingBalance: 550 },
+      { name: "Wallet Account", total: 2, closingBalance: 43.8, currency: "NGN", detectedCurrency: "NGN" },
+      { name: "Savings Account", total: 1, closingBalance: 550, currency: "NGN", detectedCurrency: "NGN" },
     ]);
 
     const saved = await client.request("POST", "/transactions/import", { form: form(file, "statement.xlsx", XLSX) });
