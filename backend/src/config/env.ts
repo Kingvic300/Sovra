@@ -48,6 +48,15 @@ const EnvSchema = z.object({
   WALLET_SYNC_MAX_PAGES: positiveInt(10),
   /** Ask Sovra questions per hour per IP from demo accounts, on top of the per-user limit (each demo is a new user). */
   RATE_LIMIT_DEMO_ASK_PER_HOUR: positiveInt(10),
+  /**
+   * Shared secret for POST /api/internal/jobs/run (send `Authorization: Bearer <secret>`).
+   * Unset turns the endpoint off. At least 32 characters, e.g. `openssl rand -hex 32`.
+   */
+  CRON_SECRET: optional.refine((v) => v === undefined || v.length >= 32, "CRON_SECRET must be at least 32 characters"),
+  /** Run the jobs inside the API process every N minutes. 0 (default) is off: use only on always-on hosts. */
+  JOBS_INTERVAL_MINUTES: z.coerce.number().int().min(0).max(1440).default(0),
+  /** Remind about renewals due within this many days. */
+  REMINDER_DAYS_AHEAD: positiveInt(3),
   /** How long a demo account lives before it and its data are deleted. */
   DEMO_TTL_HOURS: positiveInt(24),
 });

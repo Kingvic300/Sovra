@@ -50,6 +50,13 @@
       "when": 1793282696078,
       "tag": "0006_budget_suggestion_decisions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793282767617,
+      "tag": "0007_reminders",
+      "breakpoints": true
     }
   ]
 }
