@@ -171,6 +171,25 @@ export const recurringStates = pgTable(
   (t) => [primaryKey({ columns: [t.userAddress, t.merchantKey] })],
 );
 
+/** What the user did with a budget suggestion. Dismissed ones stay hidden for 90 days. */
+export const budgetSuggestionDecisions = pgTable(
+  "budget_suggestion_decisions",
+  {
+    userAddress: text("user_address")
+      .notNull()
+      .references(() => users.address, { onDelete: "cascade" }),
+    /** Deterministic suggestion id: `category:direction:to`. */
+    suggestionId: text("suggestion_id").notNull(),
+    category: text("category").notNull(),
+    direction: text("direction", { enum: ["raise", "lower"] }).notNull(),
+    fromLimit: numeric("from_limit", { precision: 14, scale: 2 }).notNull(),
+    toLimit: numeric("to_limit", { precision: 14, scale: 2 }).notNull(),
+    decision: text("decision", { enum: ["accepted", "dismissed"] }).notNull(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userAddress, t.suggestionId] }), index("budget_suggestion_decisions_category_idx").on(t.userAddress, t.category)],
+);
+
 /** Ask Sovra questions that got an answer, with the memories the answer used. */
 export const askMessages = pgTable(
   "ask_messages",

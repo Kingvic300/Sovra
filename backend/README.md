@@ -98,6 +98,9 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | POST | `/transactions/import?preview=1&dateOrder=dmy` | Multipart CSV `file` (+ optional `accountName`). With `preview=1` nothing is saved. When the CSV has a balance column, the balance after its latest row becomes the account balance (`closingBalance` in the preview). On import, merchants without a learned rule are categorized by Groq when configured; the response's `categorizedBy` counts rules, AI and keyword fallbacks |
 | PATCH | `/transactions/:id` | `{category, remember}`. With `remember: true` it saves a merchant rule, recategorizes that merchant and writes a memory |
 | GET | `/budgets?month=` | Limits with `spent` for the month, `committed` (active recurring charges still expected before the month ends; paused ones and ended months count 0), `projected` (spent + committed) and the `renewals` behind it |
+| GET | `/budgets/suggestions` | Limit changes suggested from the last three full months → `{suggestions: [{id, category, label, direction, from, to, text, evidence}]}` (see below) |
+| POST | `/budgets/suggestions/:id/accept` | Sets the suggested limit and remembers the decision. `404` if it isn't on offer, `409 already_decided` if already answered |
+| POST | `/budgets/suggestions/:id/dismiss` | Keeps the limit; that category and direction isn't suggested again for 90 days |
 | PUT | `/budgets/:category` | `{limit}` |
 | DELETE | `/budgets/:category` | Removes a limit |
 | GET | `/goals` | Savings goals |
@@ -133,6 +136,15 @@ Known limitation: counters live in process memory. Each instance counts separate
 **Errors.** Malformed JSON (400), bodies over 100 kB (413), CSVs over 5 MB (413), unknown routes (404) and unexpected failures (500, details only in the server log) all use the `{ "error": { "code", "message" } }` shape.
 
 **Authorization.** Every route except `health` and `auth/*` requires the session cookie, and every query filters by the session's address. Integration tests check that one user can't read or change another's transactions, budgets, goals or memories.
+
+## Budget suggestions
+
+`src/budgets/budget-suggestions.ts` applies two fixed rules to each category with a limit, using spending in the last three full calendar months. There's no AI involved, and the response includes the numbers each suggestion is based on (`evidence`).
+
+- **Raise** when spending went over the limit in at least 2 of the 3 months and used at least 80% of it in all 3. The new limit is the median month rounded up to $10.
+- **Lower** when spending stayed under 60% of the limit in all 3 months (and wasn't zero). The new limit is the highest month plus 20%, rounded up to $10, never below $10, and only if this month's projected spending (spent + renewals still due) fits under it.
+
+Without transactions going back to the start of the first of those months, there are no suggestions. Ids are `category:direction:to`, so the same data always gives the same ids. Accepting or dismissing stores a decision (`budget_suggestion_decisions`) and a memory, best-effort. A dismissed category and direction stays hidden for 90 days, even if the limit changes.
 
 ## Demo accounts
 
