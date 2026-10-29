@@ -3,6 +3,7 @@ import { api, ApiError } from "@/lib/api";
 import {
   AppDataContext,
   SAMPLE_DATA,
+  emptyData,
   liveMonthNet,
   monthEndOf,
   nextPayday,
@@ -55,6 +56,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const toast = useToast();
   const [sample, setSample] = useState<AppData>(loadSample);
+  /** Local-only data for a real account the backend couldn't serve. Starts empty for each address. */
+  const [offline, setOffline] = useState<{ address: string | null; data: AppData } | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const address = auth.session?.address ?? null;
   const verified = auth.server === "verified";
@@ -63,16 +66,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const current = verified && loaded?.address === address ? loaded.data : null;
   const live = current !== null && current !== "failed";
   const waiting = (verified && current === null) || auth.server === "checking";
+  // Only the demo account ever sees the sample story.
+  const isDemo = auth.session?.method === "demo";
+  const offlineData = useMemo(
+    () => (offline?.address === address ? offline.data : emptyData(localToday())),
+    [offline, address],
+  );
+  const fallback = isDemo ? sample : offlineData;
   const data = useMemo<AppData>(
-    () => (live ? current : waiting ? { ...sample, source: "loading" } : sample),
-    [live, current, waiting, sample],
+    () => (live ? current : waiting ? { ...fallback, source: "loading" } : fallback),
+    [live, current, waiting, fallback],
   );
 
-  // Mutations read this without being re-created on every render.
+  // Mutations read these without being re-created on every render.
   const liveRef = useRef(live);
+  const demoRef = useRef(isDemo);
+  const addressRef = useRef(address);
   useLayoutEffect(() => {
     liveRef.current = live;
-  }, [live]);
+    demoRef.current = isDemo;
+    addressRef.current = address;
+  }, [live, isDemo, address]);
   /** Temporary ids of rows being created on the server, resolved to their server ids. */
   const pending = useRef(new Map<string, Promise<string | null>>());
   /** Bumped on each load so a slow response can't overwrite a newer one. */
@@ -80,7 +94,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   /** Applies a change to whichever data is on screen. */
   const setData = useCallback((change: (d: AppData) => AppData) => {
-    if (!liveRef.current) return setSample(change);
+    if (!liveRef.current && demoRef.current) return setSample(change);
+    if (!liveRef.current) {
+      const owner = addressRef.current;
+      return setOffline((o) => ({ address: owner, data: change(o?.address === owner ? o.data : emptyData(localToday())) }));
+    }
     setLoaded((l) => (l && l.data !== "failed" ? { ...l, data: change(l.data) } : l));
   }, []);
 
@@ -307,7 +325,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const reset = useCallback(() => {
     if (liveRef.current) void reload();
-    else setSample(SAMPLE_DATA);
+    else if (demoRef.current) setSample(SAMPLE_DATA);
+    else setOffline(null);
   }, [reload]);
 
   const value = useMemo<AppDataApi>(

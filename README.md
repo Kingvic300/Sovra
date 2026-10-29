@@ -219,7 +219,7 @@ Any integration without its key answers `503 {"error":{"code":"not_configured"}}
 |---|---|
 | `/` | Home |
 | `/how-it-works`, `/security`, `/faq` | Marketing pages |
-| `/signin`, `/signup` | Sui wallet or demo account |
+| `/signin`, `/signup` | Email and password, Sui wallet, or demo account |
 | `/onboarding` | Four-step setup |
 | `/app` | Overview |
 | `/app/transactions`, `/app/budgets`, `/app/goals`, `/app/recurring` | Money screens |
@@ -238,7 +238,7 @@ All routes are under `/api` and return errors as `{ "error": { "code", "message"
 | Area | Endpoints |
 |---|---|
 | Health | `GET /health` |
-| Auth | `POST /auth/nonce`, `POST /auth/verify`, `POST /auth/demo`, `POST /auth/logout` |
+| Auth | `POST /auth/nonce`, `POST /auth/verify`, `POST /auth/signup`, `POST /auth/login`, `POST /auth/demo`, `POST /auth/logout` |
 | Profile | `GET /me`, `PUT /me/profile` |
 | Wallet | `GET /wallet/balance`, `GET /wallet/transactions`, `GET /wallet/deposit` |
 | Memories | `GET /memories`, `POST /memories`, `POST /memories/recall`, `DELETE /memories/:id` |

@@ -11,7 +11,7 @@ import type { Session } from "@/lib/auth-context";
 export type ServerSession = "idle" | "checking" | "verified" | "unavailable" | "failed";
 
 /** The backend still calls signed-in wallet users "google", from when sign-in used zkLogin. */
-type ServerUser = { address: string; method: "google" | "demo" };
+type ServerUser = { address: string; method: "google" | "email" | "demo" };
 
 /** True when the error means there is no Sovra backend behind /api, rather than a refusal. */
 function isUnavailable(err: unknown) {
@@ -35,7 +35,8 @@ async function currentServerUser(): Promise<ServerUser | null> {
 function matches(user: ServerUser | null, session: Session) {
   if (!user) return false;
   if (session.method === "demo") return user.method === "demo";
-  return user.method !== "demo" && normalizeSuiAddress(user.address) === normalizeSuiAddress(session.address);
+  const method = session.method === "email" ? "email" : "google";
+  return user.method === method && normalizeSuiAddress(user.address) === normalizeSuiAddress(session.address);
 }
 
 /**
@@ -52,6 +53,8 @@ export async function ensureServerSession(
       await api("/auth/demo", { method: "POST" });
       return "verified";
     }
+    // An email session can only be restored by signing in again with the password.
+    if (session.method === "email") return "failed";
     const { message } = await api<{ message: string }>("/auth/nonce", { method: "POST", json: { address: session.address } });
     const signature = await sign(new TextEncoder().encode(message));
     await api("/auth/verify", {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 import { TopUpDialog } from "./top-up-dialog";
 
 /** Button that opens the USDC top-up flow. */
@@ -16,6 +17,9 @@ export function TopUpButton({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const { session } = useAuth();
+  // An email account's address is only an id; USDC sent there could never be spent.
+  if (session?.method === "email") return null;
   return (
     <>
       <Button variant={variant} size={size} className={className} onClick={() => setOpen(true)}>

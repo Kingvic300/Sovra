@@ -25,11 +25,12 @@ import {
 import { daysBetween, longDate } from "@/lib/format";
 
 /**
- * - "sample": no backend session, so the app shows the demo story and saves changes in the browser.
+ * - "sample": the demo account without a backend: the demo story, with changes saved in the browser.
  * - "loading": the backend session is being checked or the user's data is loading.
  * - "live": everything comes from, and is saved to, the backend.
+ * - "offline": a real account whose data couldn't be loaded. Screens are empty; sample data is never shown.
  */
-export type DataSource = "sample" | "loading" | "live";
+export type DataSource = "sample" | "loading" | "live" | "offline";
 
 export type AppData = {
   source: DataSource;
@@ -83,6 +84,28 @@ export const SAMPLE_DATA: AppData = {
 
 /** Whether a memory the server writes for an action was stored. "skipped" means Walrus Memory isn't set up. */
 export type MemoryOutcome = "saved" | "skipped" | "failed";
+
+/** Nothing to show: a real account before its data loads or when the backend can't be reached. */
+export function emptyData(today: string): AppData {
+  return {
+    source: "offline",
+    today,
+    monthEnd: monthEndOf(today),
+    payday: monthEndOf(today),
+    budgets: [],
+    goals: [],
+    recurring: [],
+    memories: [],
+    hiddenMemories: 0,
+    transactions: [],
+    accounts: [],
+    total: null,
+    balanceHistory: [],
+    monthNet: 0,
+    chat: [],
+    answered: [],
+  };
+}
 
 export type NewMemory = { kind: MemoryKind; text: string; highlight: string; source: string };
 
@@ -203,7 +226,23 @@ export function walletAccount(data: AppData) {
 export function shellStats(data: AppData) {
   const wallet = walletAccount(data);
   const month = data.today.slice(0, 7);
+  const loading = data.source === "loading";
+  if (loading) {
+    // Nothing to count yet: badges stay hidden and the shell shows placeholders instead of sample numbers.
+    return {
+      loading,
+      transactions: 0,
+      budgetsOver: 0,
+      dueSoon: 0,
+      memories: 0,
+      freeUntilPayday: 0,
+      daysToPayday: 0,
+      walletSyncedToday: false,
+      walletBalance: null,
+    };
+  }
   return {
+    loading,
     transactions: data.transactions.filter((t) => t.date.startsWith(month)).length,
     budgetsOver: budgetViews(data).filter((b) => b.over).length,
     dueSoon: data.recurring.filter((r) => r.status === "active" && daysBetween(data.today, r.next) <= 3).length,

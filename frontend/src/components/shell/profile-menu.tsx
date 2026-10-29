@@ -38,7 +38,7 @@ export function ProfileMenu() {
     );
   }
   const name = profile?.name || session.name || "You";
-  const detail = session.method === "demo" ? "Demo account" : session.email || "Sui wallet";
+  const detail = session.method === "demo" ? "Demo account" : session.email || (session.method === "wallet" ? "Sui wallet" : "Email account");
 
   async function copyAddress() {
     await navigator.clipboard.writeText(session!.address);

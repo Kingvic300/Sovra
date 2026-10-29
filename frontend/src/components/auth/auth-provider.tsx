@@ -4,7 +4,15 @@ import { WalletFailedBadge } from "@/components/ui/wallet-badge";
 import { api } from "@/lib/api";
 import { AuthContext, type AuthState, type Profile, type Session } from "@/lib/auth-context";
 import { ACCOUNTS, USER_NAME } from "@/lib/demo-data";
-import { readDemoFlag, readProfile, writeDemoFlag, writeProfile } from "@/lib/profile-store";
+import {
+  readDemoFlag,
+  readEmailSession,
+  readProfile,
+  writeDemoFlag,
+  writeEmailSession,
+  writeProfile,
+  type EmailSession,
+} from "@/lib/profile-store";
 import { endServerSession, ensureServerSession, type ServerSession } from "@/lib/server-session";
 import { useToast } from "@/lib/toast-context";
 
@@ -30,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const dAppKit = useDAppKit();
   const connection = useWalletConnection();
   const [demo, setDemo] = useState(readDemoFlag);
+  const [emailSession, setEmailSession] = useState(readEmailSession);
   // Bumped after saving so the profile is re-read from storage.
   const [profileRevision, setProfileRevision] = useState(0);
   const [server, setServer] = useState<{ address: string; status: ServerSession } | null>(null);
@@ -43,8 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const session: Session | null = useMemo(() => {
     if (walletAddress) return { method: "wallet", address: walletAddress, name: "" };
+    if (emailSession) return { method: "email", ...emailSession };
     return demo ? DEMO_SESSION : null;
-  }, [walletAddress, demo]);
+  }, [walletAddress, emailSession, demo]);
 
   // Prove the session to the backend so its data routes trust this address.
   useEffect(() => {
@@ -62,6 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if (cancelled) return;
         setServer({ address: session.address, status });
+        if (status === "failed" && session.method === "email") {
+          // The cookie expired or was cleared; only the password can start a new one.
+          writeEmailSession(null);
+          setEmailSession(null);
+          toast.info({ title: "Your session ended", description: "Sign in again with your email and password." });
+        }
         if (status === "failed" && session.method === "wallet") {
           toast.error({
             title: "Sovra couldn't confirm your wallet",
@@ -94,6 +110,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [dAppKit],
   );
 
+  /** Both email routes answer `{ user }` and set the session cookie. */
+  const startEmailSession = useCallback((user: { address: string; email: string; name?: string }) => {
+    const next: EmailSession = { address: user.address, email: user.email, name: user.name ?? "" };
+    writeDemoFlag(false);
+    setDemo(false);
+    writeEmailSession(next);
+    // The session effect confirms the cookie with /me and loads the saved profile before the app opens.
+    setEmailSession(next);
+  }, []);
+
+  const signUpWithEmail = useCallback<AuthState["signUpWithEmail"]>(
+    async (input) => {
+      const { user } = await api<{ user: { address: string; email: string; name?: string } }>("/auth/signup", {
+        method: "POST",
+        json: input,
+      });
+      startEmailSession(user);
+    },
+    [startEmailSession],
+  );
+
+  const signInWithEmail = useCallback<AuthState["signInWithEmail"]>(
+    async (input) => {
+      const { user } = await api<{ user: { address: string; email: string; name?: string } }>("/auth/login", {
+        method: "POST",
+        json: input,
+      });
+      startEmailSession(user);
+    },
+    [startEmailSession],
+  );
+
   const startDemo = useCallback(() => {
     writeDemoFlag(true);
     setDemo(true);
@@ -104,6 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (connection.isConnected) await dAppKit.disconnectWallet();
     writeDemoFlag(false);
     setDemo(false);
+    writeEmailSession(null);
+    setEmailSession(null);
   }, [dAppKit, connection.isConnected]);
 
   const saveProfile = useCallback(
@@ -121,8 +171,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     !session && (connection.isReconnecting || connection.isConnecting) ? "loading" : session ? "signed-in" : "signed-out";
 
   const value = useMemo<AuthState>(
-    () => ({ status, session, profile, server: serverStatus, signInWithWallet, startDemo, signOut, saveProfile }),
-    [status, session, profile, serverStatus, signInWithWallet, startDemo, signOut, saveProfile],
+    () => ({
+      status,
+      session,
+      profile,
+      server: serverStatus,
+      signInWithWallet,
+      signUpWithEmail,
+      signInWithEmail,
+      startDemo,
+      signOut,
+      saveProfile,
+    }),
+    [status, session, profile, serverStatus, signInWithWallet, signUpWithEmail, signInWithEmail, startDemo, signOut, saveProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

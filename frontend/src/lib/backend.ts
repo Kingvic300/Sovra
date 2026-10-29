@@ -64,6 +64,7 @@ const WALLET_DETAIL: Record<WalletStatus, string> = {
   not_configured: "Tatum isn't set up on the server yet",
   unavailable: "Tatum didn't answer. Try refreshing",
   skipped_demo: "Demo accounts aren't read onchain",
+  no_wallet: "Sign in with a Sui wallet to include USDC",
 };
 
 export type LiveData = {
@@ -126,7 +127,8 @@ export async function loadLiveData(today: string, paused: Set<string>): Promise<
         source: "csv" as const,
         syncedAt: (a.syncedAt ?? a.lastTransactionDate ?? "").slice(0, 10),
       })),
-      walletAccount,
+      // Email accounts have no wallet at all, so there is nothing to list.
+      ...(wallet.status === "no_wallet" ? [] : [walletAccount]),
     ],
     memories: memories.memories.map(toMemory),
     total: summary.total,

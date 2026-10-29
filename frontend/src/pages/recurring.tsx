@@ -43,6 +43,7 @@ export default function RecurringPage() {
               {thisWeek.map((r) => (
                 <RecurringRow key={r.id} r={r} />
               ))}
+              {thisWeek.length === 0 && <li className="text-muted">Nothing renews in the next 7 days.</li>}
             </ul>
           </Panel>
 
@@ -62,6 +63,11 @@ export default function RecurringPage() {
             {later.map((r) => (
               <RecurringRow key={r.id} r={r} />
             ))}
+            {later.length === 0 && (
+              <li className="text-muted">
+                {data.recurring.length ? "Nothing else coming up." : "Import a statement and Sovra finds your bills and subscriptions."}
+              </li>
+            )}
           </ul>
         </Panel>
       </div>

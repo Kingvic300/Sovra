@@ -33,7 +33,7 @@ const SOURCES = [
 ] as const;
 
 function methodLabel(session: Session) {
-  return session.method === "wallet" ? "Sui wallet" : "Demo account";
+  return session.method === "wallet" ? "Sui wallet" : session.method === "email" ? "Email and password" : "Demo account";
 }
 
 function IdentityCard({ session, name }: { session: Session; name: string }) {

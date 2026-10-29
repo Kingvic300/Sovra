@@ -36,7 +36,7 @@ export const CATEGORIES: Record<CategoryId, string> = {
 };
 
 /** How the backend read the Sui wallet. Sample data is always "live". */
-export type WalletStatus = "live" | "not_configured" | "unavailable" | "skipped_demo";
+export type WalletStatus = "live" | "not_configured" | "unavailable" | "skipped_demo" | "no_wallet";
 
 export type Account = {
   id: string;

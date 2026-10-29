@@ -5,6 +5,7 @@ import type { ShellStats } from "@/lib/app-data";
 import { money } from "@/lib/format";
 import { Logo } from "./logo";
 import { NotificationsButton } from "./notifications-button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ProfileMenu } from "./profile-menu";
 
 function StatusPill({ to, live, children }: { to: string; live: boolean; children: React.ReactNode }) {
@@ -36,7 +37,7 @@ export function Topbar({ stats }: { stats: ShellStats }) {
           className="flex h-10 items-center gap-2 rounded-full bg-card px-3 text-[14px] font-semibold shadow-card ring-1 ring-line"
         >
           <span className="size-3 rounded-full bg-highlighter ring-2 ring-highlighter/40" aria-hidden />
-          {stats.memories}
+          {stats.loading ? <Skeleton className="h-3.5 w-5" /> : stats.memories}
         </Link>
         <Link
           to="/app/accounts"
@@ -44,7 +45,13 @@ export function Topbar({ stats }: { stats: ShellStats }) {
           className="flex h-10 items-center gap-2 rounded-full bg-card px-3 text-[14px] font-semibold tabular-nums shadow-card ring-1 ring-line"
         >
           <span className={`size-2 rounded-full ${stats.walletSyncedToday ? "bg-gain" : "bg-muted"}`} aria-hidden />
-          {stats.walletBalance === null ? "Wallet" : money(stats.walletBalance, { whole: true })}
+          {stats.loading ? (
+            <Skeleton className="h-3.5 w-12" />
+          ) : stats.walletBalance === null ? (
+            "Wallet"
+          ) : (
+            money(stats.walletBalance, { whole: true })
+          )}
         </Link>
         <NotificationsButton />
         <ProfileMenu />
@@ -64,7 +71,13 @@ export function Topbar({ stats }: { stats: ShellStats }) {
           <div className="hidden items-center gap-2 xl:flex">
             <StatusPill to="/app/memory" live>
               <span>
-                <span className="font-semibold text-ink">{stats.memories} memories</span> on Walrus
+                {stats.loading ? (
+                  <Skeleton className="inline-block h-3.5 w-24 align-middle" />
+                ) : (
+                  <>
+                    <span className="font-semibold text-ink">{stats.memories} memories</span> on Walrus
+                  </>
+                )}
               </span>
             </StatusPill>
             <StatusPill to="/app/accounts" live={stats.walletSyncedToday}>

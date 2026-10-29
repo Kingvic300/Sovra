@@ -75,7 +75,8 @@ function OnboardingFlow() {
   const [draft, setDraft] = useState<Profile>(() => ({
     name: auth.profile?.name || firstName(auth),
     onboarded: false,
-    sources: { csv: false, sui: true },
+    // Email accounts have no wallet to read.
+    sources: { csv: false, sui: auth.session?.method !== "email" },
     goal: { name: "", target: 0, due: MONTH_OPTIONS[3].value },
     limit: { category: "entertainment", amount: 0 },
     payday: 25,
@@ -201,6 +202,7 @@ function OnboardingFlow() {
               <StepHeading title="Your account is ready">
                 A couple of quick questions and Sovra knows enough to be useful.
               </StepHeading>
+              {session.method !== "email" && (
               <div className="mt-8 flex gap-4 rounded-2xl bg-porcelain p-5">
                 <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-card text-cobalt shadow-card">
                   <KeyRound className="size-5" aria-hidden />
@@ -216,6 +218,7 @@ function OnboardingFlow() {
                   </p>
                 </div>
               </div>
+              )}
               <div className="mt-8 max-w-[440px]">
                 <Field label="What should Sovra call you?">
                   <input
@@ -241,7 +244,10 @@ function OnboardingFlow() {
                     { key: "sui", icon: Wallet, title: "USDC on Sui", body: `Read live through Tatum at ${shortAddress(session.address)}.` },
                     { key: "csv", icon: FileSpreadsheet, title: "Bank statements", body: "Upload a CSV export from any bank." },
                   ] as const
-                ).map((s) => {
+                )
+                  // Email accounts have no wallet, so only statements apply.
+                  .filter((s) => s.key !== "sui" || session.method !== "email")
+                  .map((s) => {
                   const on = draft.sources[s.key];
                   return (
                     <button

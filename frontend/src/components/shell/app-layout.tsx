@@ -1,15 +1,17 @@
 import { useEffect } from "react";
-import { Outlet } from "react-router";
+import { Outlet, useLocation } from "react-router";
 import { RequireOnboarded, RequireSession } from "@/components/auth/guards";
 import { Sidebar } from "@/components/shell/sidebar";
 import { TabBar } from "@/components/shell/tab-bar";
 import { SkipLink } from "@/components/shell/skip-link";
 import { Topbar } from "@/components/shell/topbar";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { shellStats, useAppData } from "@/lib/app-data";
 
 export function AppLayout() {
   const { data } = useAppData();
   const stats = shellStats(data);
+  const { pathname } = useLocation();
 
   // Lets fixed elements (toasts) clear the bottom tab bar on phones.
   useEffect(() => {
@@ -27,10 +29,7 @@ export function AppLayout() {
             {/* Full width beside the sidebar; pages widen their grids instead of centering. */}
             <main id="main" tabIndex={-1} className="min-w-0 flex-1 px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] sm:px-6 lg:px-10 lg:py-8 2xl:px-12">
               {data.source === "loading" ? (
-                <p role="status" className="flex items-center gap-3 py-16 text-muted">
-                  <span className="size-4 animate-spin rounded-full border-2 border-cobalt border-t-transparent motion-reduce:animate-none" aria-hidden />
-                  Loading your money…
-                </p>
+                <PageSkeleton pathname={pathname} />
               ) : (
                 <Outlet />
               )}

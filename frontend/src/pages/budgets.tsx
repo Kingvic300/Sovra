@@ -10,6 +10,7 @@ import { budgetViews, useAppData } from "@/lib/app-data";
 import { budgetTone } from "@/lib/budget-tone";
 import { BUDGET_SUGGESTIONS, CATEGORIES } from "@/lib/demo-data";
 import { daysBetween, money, monthName } from "@/lib/format";
+import { useAuth } from "@/lib/auth-context";
 import { useTitle } from "@/lib/use-title";
 
 export default function BudgetsPage() {
@@ -20,8 +21,10 @@ export default function BudgetsPage() {
   const totalLimit = budgets.reduce((s, b) => s + b.limit, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
   const daysLeft = daysBetween(data.today, data.monthEnd);
-  // Suggestions are written for the sample story; live ones show only where that budget exists.
-  const suggestions = BUDGET_SUGGESTIONS.filter((s) => data.source === "sample" || data.budgets.some((b) => b.category === s.category));
+  const { session } = useAuth();
+  // These suggestions are written for the demo story, so only the demo account sees them.
+  const suggestions =
+    session?.method === "demo" ? BUDGET_SUGGESTIONS.filter((s) => data.budgets.some((b) => b.category === s.category)) : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,7 +39,7 @@ export default function BudgetsPage() {
         }
       />
 
-      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <div className={`grid gap-5 ${suggestions.length ? "lg:grid-cols-[1.4fr_1fr]" : ""}`}>
         <Panel>
           <ul className="flex flex-col divide-y divide-line">
             {budgets.map((b) => (
@@ -77,12 +80,14 @@ export default function BudgetsPage() {
           </button>
         </Panel>
 
-        <div className="flex flex-col gap-4">
-          {suggestions.length > 0 && <h2 className="text-[15px] font-semibold">Suggested from your history</h2>}
-          {suggestions.map((s) => (
-            <BudgetSuggestionCard key={s.id} suggestion={s} />
-          ))}
-        </div>
+        {suggestions.length > 0 && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-[15px] font-semibold">Suggested from your history</h2>
+            {suggestions.map((s) => (
+              <BudgetSuggestionCard key={s.id} suggestion={s} />
+            ))}
+          </div>
+        )}
       </div>
 
       <AddBudgetDialog open={adding} onClose={() => setAdding(false)} />

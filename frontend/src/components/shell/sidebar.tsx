@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router";
 import type { ShellStats } from "@/lib/app-data";
 import { money } from "@/lib/format";
 import { Wordmark } from "./logo";
+import { Skeleton } from "@/components/ui/skeleton";
 import { isActive, navGroups, type NavBadge } from "./nav-items";
 
 function Badge({ badge }: { badge: NavBadge }) {
@@ -55,13 +56,23 @@ export function Sidebar({ stats }: { stats: ShellStats }) {
 
       <section className="mt-auto rounded-card bg-card p-4 shadow-card" aria-label="Free until payday">
         <p className="text-[13px] text-muted">Free until payday</p>
-        <p className="mt-0.5 text-[26px] leading-tight font-extrabold tracking-[-0.02em] tabular-nums">
-          {money(stats.freeUntilPayday, { whole: true })}
-        </p>
-        <p className="mt-1 text-[12px] text-muted">
-          About <span className="font-semibold text-ink">{money(perDay, { whole: true })} a day</span> for{" "}
-          {stats.daysToPayday} days. Sovra counts rent and renewals first.
-        </p>
+        {stats.loading ? (
+          <>
+            <Skeleton className="mt-1.5 h-7 w-24" />
+            <Skeleton className="mt-2 h-3 w-full" />
+            <Skeleton className="mt-1.5 h-3 w-2/3" />
+          </>
+        ) : (
+          <>
+            <p className="mt-0.5 text-[26px] leading-tight font-extrabold tracking-[-0.02em] tabular-nums">
+              {money(stats.freeUntilPayday, { whole: true })}
+            </p>
+            <p className="mt-1 text-[12px] text-muted">
+              About <span className="font-semibold text-ink">{money(perDay, { whole: true })} a day</span> for{" "}
+              {stats.daysToPayday} days. Sovra counts rent and renewals first.
+            </p>
+          </>
+        )}
       </section>
     </aside>
   );

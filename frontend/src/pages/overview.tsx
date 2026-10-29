@@ -45,7 +45,9 @@ export default function OverviewPage() {
         <div className="grid items-end gap-6 px-6 pt-6 pb-5 sm:px-7 md:grid-cols-2">
           <div>
             <p className="text-muted">
-              Across {data.accounts.length} {data.accounts.length === 1 ? "account" : "accounts"}
+              {data.accounts.length
+                ? `Across ${data.accounts.length} ${data.accounts.length === 1 ? "account" : "accounts"}`
+                : "No accounts yet. Import a statement to see your balance."}
             </p>
             <p className="mt-1 text-[44px] leading-none font-extrabold tracking-[-0.03em] tabular-nums sm:text-[56px]">
               {whole}
@@ -94,6 +96,9 @@ export default function OverviewPage() {
               </li>
             ))}
           </ul>
+          {recent.length === 0 && (
+            <p className="text-muted">Nothing yet. Set a goal or a limit, or change a category, and Sovra remembers it here.</p>
+          )}
           <div className="mt-4 border-t border-line pt-4">
             <EntertainmentInsight />
           </div>
@@ -108,6 +113,15 @@ export default function OverviewPage() {
             </Link>
           }
         >
+          {budgets.length === 0 && (
+            <p className="text-muted">
+              No budgets yet.{" "}
+              <Link to="/app/budgets" className="font-semibold text-cobalt hover:underline">
+                Add one
+              </Link>{" "}
+              and Sovra counts renewals before they land.
+            </p>
+          )}
           <ul className="flex flex-col gap-4">
             {budgets.slice(0, 4).map((b) => {
               return (

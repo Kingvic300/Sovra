@@ -3,11 +3,14 @@ import type { UiWallet } from "@mysten/dapp-kit-react";
 import type { CategoryId } from "@/lib/demo-data";
 import type { ServerSession } from "@/lib/server-session";
 
-export type SignInMethod = "wallet" | "demo";
+export type SignInMethod = "wallet" | "email" | "demo";
 
 export type Session = {
   method: SignInMethod;
-  /** The connected Sui wallet address, or the demo wallet for the demo account. */
+  /**
+   * The connected Sui wallet address, or the demo wallet for the demo account.
+   * Email accounts get a random address from the backend that is only an id, never a wallet.
+   */
   address: string;
   name: string;
   email?: string;
@@ -31,6 +34,9 @@ export type AuthState = {
   server: ServerSession;
   /** Connects a Sui wallet. The backend session follows once the wallet signs Sovra's challenge. */
   signInWithWallet: (wallet: UiWallet) => Promise<void>;
+  /** Create an email account or sign in to one. Rejects with ApiError, e.g. code "email_taken". */
+  signUpWithEmail: (input: { name: string; email: string; password: string }) => Promise<void>;
+  signInWithEmail: (input: { email: string; password: string }) => Promise<void>;
   startDemo: () => void;
   signOut: () => Promise<void>;
   /** Saves in the browser, and on the backend when it has a session. Rejects if the backend refuses. */

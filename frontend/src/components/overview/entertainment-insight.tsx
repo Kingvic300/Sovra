@@ -1,7 +1,7 @@
 import { CircleCheck, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { budgetViews, useAppData } from "@/lib/app-data";
-import { money } from "@/lib/format";
+import { longDate, money, monthName } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 const NETFLIX_ACCOUNT_URL = "https://www.netflix.com/account";
@@ -19,6 +19,14 @@ export function EntertainmentInsight() {
   if (!ent || !netflix) return null;
   const INSIGHT_ID = `entertainment-over-${data.today.slice(0, 7)}`;
   const NETFLIX_ID = netflix.id;
+  // Wording comes from the user's own data: the renewal's month and weekday, and their first goal.
+  const month = monthName(netflix.next);
+  const weekday = longDate(netflix.next).split(",")[0];
+  const goal = data.goals[0]?.name.toLowerCase();
+  const others = data.recurring
+    .filter((r) => r.id !== netflix.id && r.status === "active" && r.category === "entertainment" && r.next <= data.monthEnd)
+    .map((r) => r.merchant);
+  const keptNames = ["Netflix", ...others].join(" and ");
 
   const pausedByUser = netflix.status === "paused";
   const kept = data.answered.includes(INSIGHT_ID);
@@ -27,8 +35,8 @@ export function EntertainmentInsight() {
     setRecurringStatus(NETFLIX_ID, "paused");
     const memoryId = addMemory({
       kind: "decision",
-      text: "You paused Netflix in November to stay under your entertainment limit.",
-      highlight: "paused Netflix in November",
+      text: `You paused Netflix in ${month} to stay under your entertainment limit.`,
+      highlight: `paused Netflix in ${month}`,
       source: "You chose on the overview",
     });
     toast.success({
@@ -48,8 +56,8 @@ export function EntertainmentInsight() {
     markAnswered(INSIGHT_ID, true);
     const memoryId = addMemory({
       kind: "decision",
-      text: "You kept Netflix and Spotify in November, even over your entertainment limit.",
-      highlight: "kept Netflix and Spotify",
+      text: `You kept ${keptNames} in ${month}, even over your entertainment limit.`,
+      highlight: `kept ${keptNames}`,
       source: "You chose on the overview",
     });
     toast.info({
@@ -76,11 +84,12 @@ export function EntertainmentInsight() {
         <p className="flex items-start gap-2.5 font-medium text-gain">
           <CircleCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
           Netflix is paused. Entertainment ends the month at {money(ent.projected, { whole: true })} of{" "}
-          {money(ent.limit, { whole: true })}, and the laptop fund stays on track.
+          {money(ent.limit, { whole: true })}
+          {goal ? `, and the ${goal} stays on track.` : "."}
         </p>
         <p className="text-[14px] text-muted">
-          Sovra can't change your Netflix account. Pause or cancel it there too, or the charge still goes through on
-          Friday.
+          Sovra can't change your Netflix account. Pause or cancel it there too, or the charge still goes through on{" "}
+          {weekday}.
         </p>
         <div className="flex flex-wrap gap-2">
           <a href={NETFLIX_ACCOUNT_URL} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-lg bg-cobalt px-4 text-sm font-semibold text-white hover:bg-cobalt-deep">
@@ -109,7 +118,7 @@ export function EntertainmentInsight() {
     return (
       <p className="text-muted">
         You chose to keep both. Entertainment will end the month at {money(ent.projected, { whole: true })}, and Sovra will
-        check your limit again in November.
+        check your limit again next month.
       </p>
     );
   }
@@ -118,8 +127,8 @@ export function EntertainmentInsight() {
     <>
       <p className="mb-4 max-w-[60ch]">
         {ent.renewalSentence}. That takes entertainment to {money(ent.projected, { whole: true })},{" "}
-        {money(ent.projected - ent.limit, { whole: true })} over the limit you set. Pausing Netflix this month keeps the
-        laptop fund on track.
+        {money(ent.projected - ent.limit, { whole: true })} over the limit you set. Pausing Netflix this month
+        {goal ? ` keeps the ${goal} on track.` : " brings it back under."}
       </p>
       <div className="flex flex-wrap gap-2">
         <Button onClick={pause}>Pause Netflix</Button>

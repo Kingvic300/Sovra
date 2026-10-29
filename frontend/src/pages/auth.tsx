@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useWallets, type UiWallet } from "@mysten/dapp-kit-react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { Highlighter, KeyRound, Loader2, ShieldCheck } from "lucide-react";
+import { EmailForm } from "@/components/auth/email-form";
 import { Logo, Wordmark } from "@/components/shell/logo";
 import { Button } from "@/components/ui/button";
 import { Remembered } from "@/components/ui/remembered";
@@ -76,11 +77,19 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
             </h1>
             <p className="mt-2 text-[16px] text-muted">
               {signin
-                ? "Connect your Sui wallet. Sovra picks up exactly where you left off."
-                : "Connect a Sui wallet. No email, no password. Slush works in the browser with nothing to install."}
+                ? "Use your email or your Sui wallet. Sovra picks up exactly where you left off."
+                : "Sign up with email, or connect a Sui wallet to include USDC. Slush works in the browser with nothing to install."}
             </p>
 
             <div className="mt-8 rounded-card bg-card p-5 shadow-card">
+              <EmailForm mode={mode} disabled={busy !== null} onBusy={(b) => setBusy(b ? "email" : null)} />
+
+              <div className="my-5 flex items-center gap-3 text-[13px] text-muted">
+                <span className="h-px flex-1 bg-line" />
+                or use a Sui wallet
+                <span className="h-px flex-1 bg-line" />
+              </div>
+
               <ul className="flex flex-col gap-2">
                 {wallets.map((w) => (
                   <li key={w.name}>
@@ -109,17 +118,6 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
                   and reload this page.
                 </p>
               )}
-
-              <ul className="mt-4 flex flex-col gap-2 text-[13px] text-muted">
-                {FACTS.slice(0, 2).map((f) => (
-                  <li key={f.title} className="flex items-center gap-2">
-                    <f.icon className="size-4 text-cobalt" aria-hidden />
-                    <span>
-                      <span className="font-semibold text-ink">{f.title}.</span> {f.body.split(".")[0]}.
-                    </span>
-                  </li>
-                ))}
-              </ul>
             </div>
 
             <div className="my-6 flex items-center gap-3 text-[13px] text-muted">

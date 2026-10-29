@@ -24,8 +24,10 @@ export function RequireSession({ children }: { children: ReactNode }) {
 
 /** Signed-in users who finished onboarding. */
 export function RequireOnboarded({ children }: { children: ReactNode }) {
-  const { profile } = useAuth();
+  const { profile, server } = useAuth();
   if (!ROUTE_GUARDS_ENABLED) return children;
+  // A returning user's profile arrives with the backend session, so wait for it before deciding.
+  if (!profile && server === "checking") return <Splash />;
   if (!profile?.onboarded) return <Navigate to="/onboarding" replace />;
   return children;
 }
