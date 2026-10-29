@@ -41,7 +41,7 @@ export function Topbar({ stats }: { stats: ShellStats }) {
         </Link>
         <Link
           to="/app/accounts"
-          aria-label={stats.walletBalance === null ? "Sui wallet" : `Sui wallet ${money(stats.walletBalance)} USDC, live via Tatum`}
+          aria-label={stats.walletBalance === null ? "Sui wallet" : `Sui wallet ${money(stats.walletBalance, { currency: "USD" })} USDC, live via Tatum`}
           className="flex h-10 items-center gap-2 rounded-full bg-card px-3 text-[14px] font-semibold tabular-nums shadow-card ring-1 ring-line"
         >
           <span className={`size-2 rounded-full ${stats.walletSyncedToday ? "bg-gain" : "bg-muted"}`} aria-hidden />
@@ -50,7 +50,7 @@ export function Topbar({ stats }: { stats: ShellStats }) {
           ) : stats.walletBalance === null ? (
             "Wallet"
           ) : (
-            money(stats.walletBalance, { whole: true })
+            money(stats.walletBalance, { whole: true, currency: "USD" })
           )}
         </Link>
         <NotificationsButton />

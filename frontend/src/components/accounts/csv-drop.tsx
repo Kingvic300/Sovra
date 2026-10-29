@@ -3,17 +3,20 @@ import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
 import { useAppData } from "@/lib/app-data";
+import { currencyName } from "@/lib/currency";
 import { CATEGORIES, type CategoryId } from "@/lib/demo-data";
 import { money, shortDate, signedMoney } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 type PreviewRow = { date: string; merchant: string; amount: number; category: CategoryId; learned: boolean };
 /** A workbook with several sheets becomes one account per sheet; `accounts` lists them. */
-type PreviewAccount = { name: string; total: number; closingBalance: number | null };
+type PreviewAccount = { name: string; total: number; closingBalance: number | null; currency?: string };
 type Preview = {
   total: number;
   closingBalance: number | null;
   accounts?: PreviewAccount[];
+  /** Detected from the statement ("Debit(₦)"), else the user's. */
+  currency?: string;
   rows: PreviewRow[];
   skipped: { line: number; reason: string }[];
 };
@@ -120,7 +123,8 @@ export function CsvDrop() {
       <div className="rounded-card border border-line px-5 py-5">
         <p>
           <span className="font-semibold">{file.name}</span>: {preview.total} transactions
-          {preview.closingBalance !== null && <>, ending balance {money(preview.closingBalance)}</>}.
+          {preview.closingBalance !== null && <>, ending balance {money(preview.closingBalance, { currency: preview.currency })}</>}
+          {preview.currency && <>, in {currencyName(preview.currency)}</>}.
           {preview.skipped.length > 0 && (
             <span className="text-muted"> {preview.skipped.length} rows skipped because they couldn't be read.</span>
           )}
@@ -132,7 +136,7 @@ export function CsvDrop() {
               <li key={a.name} className="flex justify-between gap-3">
                 <span className="font-medium">{a.name}</span>
                 <span className="text-muted tabular-nums">
-                  {a.total} transactions{a.closingBalance !== null && <>, {money(a.closingBalance)}</>}
+                  {a.total} transactions{a.closingBalance !== null && <>, {money(a.closingBalance, { currency: a.currency })}</>}
                 </span>
               </li>
             ))}
@@ -146,7 +150,7 @@ export function CsvDrop() {
                 {r.merchant} <span className="text-muted">{CATEGORIES[r.category]}</span>
                 {r.learned && <span className="ml-1.5 text-cobalt">learned</span>}
               </span>
-              <span className={`font-semibold tabular-nums ${r.amount > 0 ? "text-gain" : ""}`}>{signedMoney(r.amount)}</span>
+              <span className={`font-semibold tabular-nums ${r.amount > 0 ? "text-gain" : ""}`}>{signedMoney(r.amount, preview.currency)}</span>
             </li>
           ))}
         </ul>

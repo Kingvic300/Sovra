@@ -49,6 +49,8 @@ export type Account = {
   /** ISO date, empty when never read. */
   syncedAt: string;
   status?: WalletStatus;
+  /** ISO 4217 code of this account's balance and transactions. The wallet is always USD (USDC). */
+  currency?: string;
 };
 
 export const ACCOUNTS: Account[] = [

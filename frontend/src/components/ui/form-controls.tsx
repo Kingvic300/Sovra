@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { currencySymbol } from "@/lib/format";
 import { fieldClass } from "./field-class";
 
 export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
@@ -23,17 +24,21 @@ export function MoneyInput({
   onChange,
   placeholder,
   autoFocus,
+  currency,
 }: {
   value: number;
   onChange: (n: number) => void;
   placeholder: string;
   autoFocus?: boolean;
+  /** Defaults to the user's currency. */
+  currency?: string;
 }) {
+  const symbol = currencySymbol(currency);
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-[16px] text-muted">$</span>
+      <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-[16px] text-muted">{symbol}</span>
       <input
-        className={`${fieldClass} pl-8 tabular-nums`}
+        className={`${fieldClass} ${symbol.length > 1 ? "pl-12" : "pl-8"} tabular-nums`}
         inputMode="decimal"
         value={value ? String(value) : ""}
         onChange={(e) => onChange(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)}

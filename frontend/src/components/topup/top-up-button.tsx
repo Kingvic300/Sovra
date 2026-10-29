@@ -18,8 +18,8 @@ export function TopUpButton({
 }) {
   const [open, setOpen] = useState(false);
   const { session } = useAuth();
-  // An email account's address is only an id; USDC sent there could never be spent.
-  if (session?.method === "email") return null;
+  // Email and demo accounts' addresses are ids nobody holds keys for; USDC sent there could never be spent.
+  if (session?.method === "email" || session?.method === "demo") return null;
   return (
     <>
       <Button variant={variant} size={size} className={className} onClick={() => setOpen(true)}>

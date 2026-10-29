@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   Check,
@@ -22,6 +22,7 @@ import { Panel } from "@/components/ui/panel";
 import { Remembered } from "@/components/ui/remembered";
 import { ApiError } from "@/lib/api";
 import { memoryCount, useAppData } from "@/lib/app-data";
+import { currencyOptions } from "@/lib/currency";
 import { useAuth, type Profile, type Session } from "@/lib/auth-context";
 import { shortAddress } from "@/lib/format";
 import { memoriesFromProfile, ordinal, paydayMemory } from "@/lib/onboarding";
@@ -98,20 +99,27 @@ function DetailsForm({ base, canSave }: { base: Profile; canSave: boolean }) {
   const [name, setName] = useState(base.name);
   const [payday, setPayday] = useState(base.payday);
   const [sources, setSources] = useState(base.sources);
+  const [currency, setCurrency] = useState(base.currency ?? data.currency);
+  const currencies = useMemo(() => currencyOptions(), []);
 
   const dirty =
-    name.trim() !== base.name || payday !== base.payday || sources.csv !== base.sources.csv || sources.sui !== base.sources.sui;
+    name.trim() !== base.name ||
+    payday !== base.payday ||
+    sources.csv !== base.sources.csv ||
+    sources.sui !== base.sources.sui ||
+    currency !== (base.currency ?? data.currency);
 
   function discard() {
     setName(base.name);
     setPayday(base.payday);
     setSources(base.sources);
+    setCurrency(base.currency ?? data.currency);
   }
 
   async function save(e: FormEvent) {
     e.preventDefault();
     if (!dirty || !name.trim()) return;
-    const next: Profile = { ...base, name: name.trim(), payday, sources };
+    const next: Profile = { ...base, name: name.trim(), payday, sources, currency };
     const memory = payday !== base.payday ? paydayMemory(next) : null;
     try {
       await saveProfile(next);
@@ -119,7 +127,7 @@ function DetailsForm({ base, canSave }: { base: Profile; canSave: boolean }) {
       toast.error({ title: "Couldn't save your profile", description: err instanceof ApiError ? err.message : "Try again in a moment." });
       return;
     }
-    // The backend remembers a new payday itself.
+    // The backend remembers a new payday itself, and converts accounts into a new currency.
     if (data.source === "live") void reload();
     else if (memory) addMemory({ kind: "preference", ...memory, source: "You updated your profile" });
     toast.success({
@@ -133,6 +141,19 @@ function DetailsForm({ base, canSave }: { base: Profile; canSave: boolean }) {
       <form onSubmit={save} className="flex flex-col gap-5">
         <Field label="Name" hint="What Sovra calls you." error={name.trim() ? undefined : "Add a name so Sovra knows what to call you."}>
           <input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" />
+        </Field>
+
+        <Field
+          label="Currency"
+          hint="Totals, budgets and goals show in it. Budget and goal amounts keep their numbers, so update them if you switch."
+        >
+          <select className={fieldClass} value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {currencies.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
         </Field>
 
         <Field label="When are you paid?" hint="Sovra won't nag about a low balance in the days before payday.">

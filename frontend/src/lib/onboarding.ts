@@ -1,5 +1,6 @@
 import type { Profile } from "@/lib/auth-context";
 import { CATEGORIES } from "@/lib/demo-data";
+import { currencyName } from "@/lib/currency";
 import { money } from "@/lib/format";
 
 export type MemoryDraft = { text: string; highlight: string };
@@ -27,6 +28,12 @@ export function upcomingMonths(count: number, from = new Date()) {
   });
 }
 
+export function currencyMemory(p: Partial<Profile>): MemoryDraft | null {
+  if (!p.currency) return null;
+  const highlight = currencyName(p.currency);
+  return { text: `Your money is counted in ${highlight}.`, highlight };
+}
+
 export function nameMemory(p: Partial<Profile>): MemoryDraft | null {
   const name = p.name?.trim();
   return name ? { text: `You go by ${name}.`, highlight: name } : null;
@@ -42,7 +49,7 @@ export function sourcesMemory(p: Partial<Profile>): MemoryDraft | null {
 export function goalMemory(p: Partial<Profile>): MemoryDraft | null {
   if (!p.goal?.name.trim() || !(p.goal.target > 0)) return null;
   const month = MONTHS[Number(p.goal.due.slice(5, 7)) - 1];
-  const highlight = `${p.goal.name.trim().toLowerCase()}, ${money(p.goal.target, { whole: true })} by ${month}`;
+  const highlight = `${p.goal.name.trim().toLowerCase()}, ${money(p.goal.target, { whole: true, currency: p.currency })} by ${month}`;
   return { text: `You're saving for ${highlight}.`, highlight };
 }
 
@@ -55,7 +62,7 @@ export function paydayMemory(p: Partial<Profile>): MemoryDraft | null {
 
 export function limitMemory(p: Partial<Profile>): MemoryDraft | null {
   if (!p.limit || !(p.limit.amount > 0)) return null;
-  const highlight = `under ${money(p.limit.amount, { whole: true })} a month`;
+  const highlight = `under ${money(p.limit.amount, { whole: true, currency: p.currency })} a month`;
   return { text: `Keep ${CATEGORIES[p.limit.category].toLowerCase()} ${highlight}.`, highlight };
 }
 

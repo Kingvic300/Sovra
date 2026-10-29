@@ -43,7 +43,7 @@ export default function AccountsPage() {
               <p className="text-[17px] text-muted">{wallet.detail}.</p>
             ) : (
               <p className="text-[40px] leading-none font-extrabold tracking-[-0.03em] tabular-nums">
-                {money(wallet.balance)} <span className="text-lg font-bold text-muted">USDC</span>
+                {money(wallet.balance, { currency: "USD" })} <span className="text-lg font-bold text-muted">USDC</span>
               </p>
             )}
             <dl className="mt-5 grid grid-cols-[120px_1fr] gap-y-2 text-[14px]">
@@ -83,7 +83,7 @@ export default function AccountsPage() {
                   </div>
                 </div>
                 <p className="font-semibold tabular-nums">
-                  {a.balance === null ? <span className="font-normal text-muted">Balance not known</span> : money(a.balance)}
+                  {a.balance === null ? <span className="font-normal text-muted">Balance not known</span> : money(a.balance, { currency: a.currency })}
                 </p>
               </li>
             ))}

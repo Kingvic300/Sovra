@@ -1,4 +1,5 @@
 import { api, ApiError } from "@/lib/api";
+import type { AppData } from "@/lib/app-data";
 import type {
   Account,
   Budget,
@@ -20,9 +21,21 @@ type ApiBudget = { category: CategoryId; limit: number; spent: number };
 type ApiGoal = { id: string; name: string; target: number; saved: number; due: string; weekly: number | null };
 type ApiRecurring = { merchant: string; merchantKey: string; category: CategoryId; amount: number; nextDate: string };
 type ApiTransaction = Omit<Transaction, "accountId"> & { accountId: string | null };
-type ApiAccount = { id: string; name: string; balance: number | null; syncedAt: string | null; lastTransactionDate: string | null };
+type ApiAccount = {
+  id: string;
+  name: string;
+  balance: number | null;
+  currency: string;
+  syncedAt: string | null;
+  lastTransactionDate: string | null;
+};
 type ApiWallet = { address: string; usdc: number | null; status: WalletStatus; syncedAt: string | null };
-type ApiSummary = { total: number | null; trend: { date: string; balance: number }[] };
+type ApiSummary = {
+  currency: string;
+  total: number | null;
+  trend: { date: string; balance: number }[];
+  fx: { date: string; perUsd: number | null; source: { name: string; url: string } } | null;
+};
 export type ApiAskMessage = { id: string | null; question: string; answer: string; usedMemories: { id: string | null; text: string }[] };
 
 export const toMemory = (m: ApiMemory): Memory => ({
@@ -68,6 +81,9 @@ const WALLET_DETAIL: Record<WalletStatus, string> = {
 };
 
 export type LiveData = {
+  currency: string;
+  perUsd: number;
+  fx: AppData["fx"];
   budgets: Budget[];
   goals: Goal[];
   recurring: Recurring[];
@@ -97,7 +113,7 @@ export async function loadLiveData(today: string, paused: Set<string>): Promise<
     api<{ accounts: ApiAccount[]; wallet: ApiWallet }>("/accounts"),
     // Memories and Ask history are extras: the rest of the app works without them.
     optional(api<{ memories: ApiMemory[] }>("/memories"), { memories: [] }),
-    optional(api<ApiSummary>("/accounts/summary"), { total: null, trend: [] }),
+    optional(api<ApiSummary>("/accounts/summary"), { currency: "", total: null, trend: [], fx: null }),
     optional(api<{ messages: ApiAskMessage[] }>("/ask/history?limit=20"), { messages: [] }),
   ]);
 
@@ -111,9 +127,17 @@ export async function loadLiveData(today: string, paused: Set<string>): Promise<
     address: wallet.address,
     syncedAt: wallet.syncedAt?.slice(0, 10) ?? "",
     status: wallet.status,
+    currency: "USD",
   };
+  const currency = summary.currency || accounts.accounts[0]?.currency || "USD";
+  // The rate only matters when some account, or a USDC wallet, isn't in the user's currency.
+  const hasWallet = wallet.status !== "no_wallet" && wallet.usdc !== null;
+  const converts = (hasWallet && currency !== "USD") || accounts.accounts.some((a) => a.currency !== currency);
 
   return {
+    currency,
+    perUsd: summary.fx?.perUsd ?? 1,
+    fx: converts && summary.fx ? { date: summary.fx.date, source: summary.fx.source } : null,
     budgets: budgets.budgets.map(({ category, limit, spent }) => ({ category, limit, spent })),
     goals: goals.goals.map((g) => toGoal(g, today)),
     transactions: transactions.transactions.map((t) => ({ ...t, accountId: t.accountId ?? "" })),
@@ -124,6 +148,7 @@ export async function loadLiveData(today: string, paused: Set<string>): Promise<
         name: a.name,
         detail: "Imported from CSV",
         balance: a.balance,
+        currency: a.currency,
         source: "csv" as const,
         syncedAt: (a.syncedAt ?? a.lastTransactionDate ?? "").slice(0, 10),
       })),
@@ -132,8 +157,8 @@ export async function loadLiveData(today: string, paused: Set<string>): Promise<
     ],
     memories: memories.memories.map(toMemory),
     total: summary.total,
-    // The trend covers bank accounts; the live wallet balance is added flat so it lines up with the total.
-    balanceHistory: summary.trend.map((d) => d.balance + (wallet.usdc ?? 0)),
+    // The trend covers bank accounts in the user's currency; the live wallet (USD) is added flat at today's rate.
+    balanceHistory: summary.trend.map((d) => d.balance + (wallet.usdc ?? 0) * (summary.fx?.perUsd ?? 1)),
     chat: [...history.messages].reverse().flatMap(toChat),
   };
 }

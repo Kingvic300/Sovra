@@ -5,13 +5,14 @@ import { Modal } from "@/components/ui/modal";
 import { Remembered } from "@/components/ui/remembered";
 import { spentThisMonth, useAppData } from "@/lib/app-data";
 import { CATEGORIES, type CategoryId } from "@/lib/demo-data";
-import { money, monthName } from "@/lib/format";
+import { money, monthName, niceAmount } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 /** Categories that can have a spending limit. */
 const BUDGETABLE = (Object.keys(CATEGORIES) as CategoryId[]).filter(
   (c) => c !== "income" && c !== "transfer" && c !== "uncategorized",
 );
+/** In dollars; shown as round amounts worth about the same in the user's currency. */
 const QUICK_AMOUNTS = [50, 100, 200, 300];
 
 function AddBudgetForm({ onDone }: { onDone: () => void }) {
@@ -95,9 +96,9 @@ function AddBudgetForm({ onDone }: { onDone: () => void }) {
             <MoneyInput value={limit} onChange={setLimit} placeholder="100" autoFocus />
           </Field>
           <div className="mt-3 flex flex-wrap gap-2">
-            {QUICK_AMOUNTS.map((a) => (
+            {QUICK_AMOUNTS.map((usd) => niceAmount(usd, data.perUsd)).map((a) => (
               <Chip key={a} active={limit === a} onClick={() => setLimit(a)}>
-                ${a}
+                {money(a, { whole: true })}
               </Chip>
             ))}
           </div>

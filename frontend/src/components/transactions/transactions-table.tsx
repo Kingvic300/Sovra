@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { buttonClass } from "@/components/ui/button-class";
 import { ApiError } from "@/lib/api";
-import { useAppData } from "@/lib/app-data";
+import { currencyOf, useAppData } from "@/lib/app-data";
 import { CATEGORIES, type CategoryId, type Transaction } from "@/lib/demo-data";
 import { money, shortDate, signedMoney } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
@@ -47,6 +47,7 @@ export function TransactionsTable() {
   const searchId = useId();
 
   const accountName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? "";
+  const currencyFor = (id: string) => currencyOf(data, id);
 
   const q = query.trim().toLowerCase();
   const matching = useMemo(() => rows.filter((t) => t.merchant.toLowerCase().includes(q)), [rows, q]);
@@ -54,6 +55,9 @@ export function TransactionsTable() {
   const countFor = (c: CategoryId | "all") => (c === "all" ? matching.length : matching.filter((t) => t.category === c).length);
   const spent = visible.reduce((sum, t) => sum + Math.max(0, -t.amount), 0);
   const received = visible.reduce((sum, t) => sum + Math.max(0, t.amount), 0);
+  // Totals only add up when every shown transaction is in one currency.
+  const currencies = new Set(visible.map((t) => currencyFor(t.accountId)));
+  const totalsCurrency = currencies.size === 1 ? [...currencies][0] : null;
   const filtered = filter !== "all" || q !== "";
 
   function clearFilters() {
@@ -144,12 +148,16 @@ export function TransactionsTable() {
         <div className="flex min-h-6 items-center justify-between gap-3 text-[13px] text-muted">
           <p aria-live="polite">
             <span className="font-semibold text-ink">{visible.length}</span> {visible.length === 1 ? "transaction" : "transactions"}
-            <span aria-hidden> · </span>
-            <span className="tabular-nums">{money(spent)} out</span>
-            {received > 0 && (
+            {totalsCurrency && (
               <>
                 <span aria-hidden> · </span>
-                <span className="text-gain tabular-nums">{money(received)} in</span>
+                <span className="tabular-nums">{money(spent, { currency: totalsCurrency })} out</span>
+                {received > 0 && (
+                  <>
+                    <span aria-hidden> · </span>
+                    <span className="text-gain tabular-nums">{money(received, { currency: totalsCurrency })} in</span>
+                  </>
+                )}
               </>
             )}
           </p>
@@ -185,7 +193,7 @@ export function TransactionsTable() {
             <li key={tx.id} className="px-4 py-3.5">
               <div className="flex items-baseline justify-between gap-3">
                 <p className="min-w-0 truncate font-semibold">{tx.merchant}</p>
-                <p className={`shrink-0 font-semibold tabular-nums ${tx.amount > 0 ? "text-gain" : ""}`}>{signedMoney(tx.amount)}</p>
+                <p className={`shrink-0 font-semibold tabular-nums ${tx.amount > 0 ? "text-gain" : ""}`}>{signedMoney(tx.amount, currencyFor(tx.accountId))}</p>
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 text-[13px] text-muted">
                 <span>
@@ -252,7 +260,7 @@ export function TransactionsTable() {
                     tx.amount > 0 ? "text-gain" : ""
                   }`}
                 >
-                  {signedMoney(tx.amount)}
+                  {signedMoney(tx.amount, currencyFor(tx.accountId))}
                 </td>
               </tr>
             ))}

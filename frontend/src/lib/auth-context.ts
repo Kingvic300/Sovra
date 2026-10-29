@@ -26,6 +26,8 @@ export type Profile = {
   /** Day of the month, or "irregular". */
   payday?: number | "irregular";
   sources: { csv: boolean; sui: boolean };
+  /** ISO 4217 code everything is shown in, e.g. "NGN". */
+  currency?: string;
 };
 
 export type AuthState = {

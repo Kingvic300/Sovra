@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { Check, FileSpreadsheet, KeyRound, Lock, Wallet } from "lucide-react";
 import { CsvDrop } from "@/components/accounts/csv-drop";
@@ -9,12 +9,14 @@ import { fieldClass } from "@/components/ui/field-class";
 import { Chip, Field, MoneyInput } from "@/components/ui/form-controls";
 import { Remembered } from "@/components/ui/remembered";
 import { spentThisMonth, useAppData } from "@/lib/app-data";
-import { ApiError } from "@/lib/api";
 import { firstName, useAuth, type Profile } from "@/lib/auth-context";
 import { ROUTE_GUARDS_ENABLED } from "@/lib/config";
 import { CATEGORIES, DEMO_WALLET_ADDRESS, type CategoryId } from "@/lib/demo-data";
-import { shortAddress } from "@/lib/format";
+import { api, ApiError } from "@/lib/api";
+import { currencyOptions, guessCurrency } from "@/lib/currency";
+import { money, niceAmount, shortAddress } from "@/lib/format";
 import {
+  currencyMemory,
   goalMemory,
   limitMemory,
   memoriesFromProfile,
@@ -32,6 +34,7 @@ const STEPS = ["About you", "Your money", "Your goal", "Your limit"] as const;
 const MONTH_OPTIONS = upcomingMonths(24);
 const GOAL_IDEAS = ["A laptop", "Rent deposit", "Emergency fund", "Trip home", "New phone"];
 const LIMIT_CATEGORIES: CategoryId[] = ["entertainment", "food", "shopping", "transport", "health", "bills"];
+/** In dollars; shown as round amounts worth about the same in the picked currency. */
 const LIMIT_AMOUNTS = [50, 100, 150, 250];
 
 function StepHeading({ title, children }: { title: string; children: ReactNode }) {
@@ -80,7 +83,26 @@ function OnboardingFlow() {
     goal: { name: "", target: 0, due: MONTH_OPTIONS[3].value },
     limit: { category: "entertainment", amount: 0 },
     payday: 25,
+    currency: auth.profile?.currency ?? guessCurrency(),
   }));
+  // Rate for the picked currency, so example amounts are sensible: ₦150,000 rather than ₦100.
+  const [rate, setRate] = useState<{ currency: string; perUsd: number } | null>(null);
+  const currency = draft.currency ?? "USD";
+  const perUsd = rate?.currency === currency ? rate.perUsd : 1;
+  const signedIn = auth.server === "verified";
+  useEffect(() => {
+    if (!signedIn || currency === "USD") return;
+    let cancelled = false;
+    api<{ perUsd: number | null }>(`/fx/rate?currency=${currency}`)
+      .then((r) => {
+        if (!cancelled && r.perUsd) setRate({ currency, perUsd: r.perUsd });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currency, signedIn]);
+  const currencies = useMemo(() => currencyOptions(), []);
   useTitle("Set up Sovra");
 
   if (ROUTE_GUARDS_ENABLED && auth.profile?.onboarded) return <Navigate to="/app" replace />;
@@ -89,13 +111,14 @@ function OnboardingFlow() {
   const canContinue = step !== 0 || draft.name.trim().length > 0;
   const ledger = [
     { label: "Your name", memory: nameMemory(draft) },
+    { label: "Your currency", memory: currencyMemory(draft) },
     { label: "Where your money lives", memory: sourcesMemory(draft) },
     { label: "What you're saving for", memory: goalMemory(draft) },
     { label: "When you're paid", memory: paydayMemory(draft) },
     { label: "Your spending limit", memory: limitMemory(draft) },
   ];
   // Ledger lines the current step writes to; the goal step fills both goal and payday.
-  const currentLines = [[0], [1], [2, 3], [4]][step];
+  const currentLines = [[0, 1], [2], [3, 4], [5]][step];
 
   function update(patch: Partial<Profile>) {
     setDraft((d) => ({ ...d, ...patch }));
@@ -167,7 +190,7 @@ function OnboardingFlow() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="grid grid-cols-[1fr_auto] items-center gap-x-6 gap-y-4 px-5 py-5 sm:px-8 lg:grid-cols-[1fr_minmax(0,560px)_1fr] lg:px-12">
+      <header className="grid grid-cols-1 items-center gap-x-6 gap-y-4 px-5 py-5 sm:px-8 lg:grid-cols-[1fr_minmax(0,560px)_1fr] lg:px-12">
         <Wordmark className="text-[22px]" />
         <ol className="order-3 col-span-2 grid grid-cols-4 gap-2 lg:order-none lg:col-span-1" aria-label="Setup progress">
           {STEPS.map((label, i) => (
@@ -182,13 +205,6 @@ function OnboardingFlow() {
             </li>
           ))}
         </ol>
-        <button
-          type="button"
-          onClick={() => finish({ ...draft, goal: undefined, limit: undefined })}
-          className="justify-self-end text-[14px] font-semibold text-muted hover:text-ink"
-        >
-          Skip setup
-        </button>
       </header>
 
       <main className="grid flex-1 gap-5 px-5 pb-8 sm:px-8 lg:grid-cols-[1.15fr_1fr] lg:px-12 lg:pb-12">
@@ -219,15 +235,28 @@ function OnboardingFlow() {
                 </div>
               </div>
               )}
-              <div className="mt-8 max-w-[440px]">
+              <div className="mt-8 flex max-w-[440px] flex-col gap-6">
                 <Field label="What should Sovra call you?">
                   <input
                     className={fieldClass}
                     value={draft.name}
                     onChange={(e) => update({ name: e.target.value })}
                     placeholder="Your first name"
+                    autoComplete="given-name"
                     autoFocus
                   />
+                </Field>
+                <Field
+                  label="Your currency"
+                  hint="Sovra shows totals, budgets and goals in it, and converts accounts in other currencies at the day's rate."
+                >
+                  <select className={fieldClass} value={currency} onChange={(e) => update({ currency: e.target.value })}>
+                    {currencies.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
               </div>
             </>
@@ -311,7 +340,8 @@ function OnboardingFlow() {
                     <MoneyInput
                       value={draft.goal?.target ?? 0}
                       onChange={(n) => update({ goal: { ...draft.goal!, target: n } })}
-                      placeholder="1,200"
+                      placeholder={niceAmount(1200, perUsd).toLocaleString("en-US")}
+                      currency={currency}
                     />
                   </Field>
                   <Field label="By">
@@ -367,13 +397,14 @@ function OnboardingFlow() {
                     <MoneyInput
                       value={draft.limit?.amount ?? 0}
                       onChange={(n) => update({ limit: { ...draft.limit!, amount: n } })}
-                      placeholder="100"
+                      placeholder={niceAmount(100, perUsd).toLocaleString("en-US")}
+                      currency={currency}
                     />
                   </Field>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {LIMIT_AMOUNTS.map((a) => (
+                    {LIMIT_AMOUNTS.map((usd) => niceAmount(usd, perUsd)).map((a) => (
                       <Chip key={a} active={draft.limit?.amount === a} onClick={() => update({ limit: { ...draft.limit!, amount: a } })}>
-                        ${a}
+                        {money(a, { whole: true, currency })}
                       </Chip>
                     ))}
                   </div>

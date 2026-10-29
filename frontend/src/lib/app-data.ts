@@ -34,6 +34,12 @@ export type DataSource = "sample" | "loading" | "live" | "offline";
 
 export type AppData = {
   source: DataSource;
+  /** ISO 4217 code totals, budgets and goals are shown in. */
+  currency: string;
+  /** Units of `currency` per 1 USD, for converting and for round example amounts. 1 when unknown. */
+  perUsd: number;
+  /** Where converted figures' rate came from. Null when nothing needed converting or rates were unavailable. */
+  fx: { date: string; source: { name: string; url: string } } | null;
   /** ISO dates every screen measures from. Fixed for the sample story, the real date when live. */
   today: string;
   monthEnd: string;
@@ -65,6 +71,9 @@ export function monthEndOf(iso: string) {
 
 export const SAMPLE_DATA: AppData = {
   source: "sample",
+  currency: "USD",
+  perUsd: 1,
+  fx: null,
   today: TODAY,
   monthEnd: monthEndOf(TODAY),
   payday: PAYDAY,
@@ -89,6 +98,9 @@ export type MemoryOutcome = "saved" | "skipped" | "failed";
 export function emptyData(today: string): AppData {
   return {
     source: "offline",
+    currency: "USD",
+    perUsd: 1,
+    fx: null,
     today,
     monthEnd: monthEndOf(today),
     payday: monthEndOf(today),
@@ -180,6 +192,7 @@ export function budgetViews(data: AppData): BudgetView[] {
 export function spentThisMonth(data: AppData, category: CategoryId) {
   const month = data.today.slice(0, 7);
   return data.transactions
+    .filter(inUserCurrency(data))
     .filter((t) => t.category === category && t.amount < 0 && t.date.startsWith(month))
     .reduce((s, t) => s + -t.amount, 0);
 }
@@ -210,13 +223,26 @@ export function nextPayday(today: string, payday: number | "irregular" | undefin
 }
 
 /** Live `monthNet`: this month's income minus spending, minus active renewals due before payday. */
-export function liveMonthNet(data: Pick<AppData, "transactions" | "recurring" | "today" | "payday">) {
+export function liveMonthNet(data: Pick<AppData, "transactions" | "recurring" | "today" | "payday" | "accounts" | "currency">) {
   const month = data.today.slice(0, 7);
-  const net = data.transactions.filter((t) => t.date.startsWith(month)).reduce((s, t) => s + t.amount, 0);
+  const net = data.transactions
+    .filter(inUserCurrency(data))
+    .filter((t) => t.date.startsWith(month))
+    .reduce((s, t) => s + t.amount, 0);
   const due = data.recurring
     .filter((r) => r.status === "active" && r.next >= data.today && r.next <= data.payday)
     .reduce((s, r) => s + r.amount, 0);
   return net - due;
+}
+
+/** The currency a transaction is in: its account's, else the user's. */
+export function currencyOf(data: Pick<AppData, "accounts" | "currency">, accountId: string) {
+  return data.accounts.find((a) => a.id === accountId)?.currency ?? data.currency;
+}
+
+/** Only transactions in the user's currency can be summed without a rate per currency. */
+function inUserCurrency(data: Pick<AppData, "accounts" | "currency">) {
+  return (t: Transaction) => currencyOf(data, t.accountId) === data.currency;
 }
 
 export function walletAccount(data: AppData) {

@@ -8,8 +8,8 @@ import { budgetTone } from "@/lib/budget-tone";
 import { Remembered } from "@/components/ui/remembered";
 import { Sparkline } from "@/components/ui/sparkline";
 import { CATEGORIES } from "@/lib/demo-data";
-import { longDate, money, monthName, shortDate, splitMoney } from "@/lib/format";
-import { budgetViews, freeUntilPayday, useAppData } from "@/lib/app-data";
+import { longDate, money, monthName, niceAmount, shortDate, splitMoney } from "@/lib/format";
+import { budgetViews, currencyOf, freeUntilPayday, useAppData } from "@/lib/app-data";
 import { firstName, useAuth } from "@/lib/auth-context";
 import { useTitle } from "@/lib/use-title";
 
@@ -17,7 +17,7 @@ export default function OverviewPage() {
   useTitle();
   const auth = useAuth();
   const { data } = useAppData();
-  const [whole, cents] = splitMoney(data.total ?? 0);
+  const [whole, cents] = data.total === null ? ["—", ""] : splitMoney(data.total);
   const free = freeUntilPayday(data);
   const recent = [...data.memories].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
   const goalMemory = data.memories.find((m) => m.kind === "goal");
@@ -36,7 +36,7 @@ export default function OverviewPage() {
           className="flex h-10 items-center gap-2 rounded-full bg-cobalt-soft px-4 text-[14px] font-semibold text-cobalt transition-colors hover:bg-cobalt hover:text-white"
         >
           <MessageSquareText className="size-4" aria-hidden />
-          Can I afford a $300 phone this month?
+          Can I afford a {money(niceAmount(300, data.perUsd), { whole: true })} phone this month?
         </Link>
       </header>
 
@@ -53,6 +53,15 @@ export default function OverviewPage() {
               {whole}
               <span className="text-[0.5em] text-muted">{cents}</span>
             </p>
+            {data.fx && (
+              <p className="mt-1 text-[12px] text-muted">
+                Converted to {data.currency} at {money(data.perUsd, { currency: data.currency })} per $1 on {shortDate(data.fx.date)}. Rates by{" "}
+                <a href={data.fx.source.url} target="_blank" rel="noreferrer" className="underline hover:text-ink">
+                  {data.fx.source.name}
+                </a>
+                .
+              </p>
+            )}
             {free >= 0 ? (
               <p className="mt-2 font-medium text-gain">+{money(free, { whole: true })} left this month after bills</p>
             ) : (
@@ -70,7 +79,7 @@ export default function OverviewPage() {
                   <span className="rounded-full bg-cobalt-soft px-2 py-px text-[11px] font-semibold text-cobalt">Live via Tatum</span>
                 )}
               </p>
-              <p className="font-semibold tabular-nums">{a.balance === null ? <span className="text-muted">Not known</span> : money(a.balance)}</p>
+              <p className="font-semibold tabular-nums">{a.balance === null ? <span className="text-muted">Not known</span> : money(a.balance, { currency: a.currency })}</p>
             </li>
           ))}
         </ul>
@@ -165,7 +174,7 @@ export default function OverviewPage() {
         >
           <ul>
             {data.transactions.slice(0, 5).map((tx) => (
-              <TransactionRow key={tx.id} tx={tx} />
+              <TransactionRow key={tx.id} tx={tx} currency={currencyOf(data, tx.accountId)} />
             ))}
           </ul>
           {data.transactions.length === 0 && (

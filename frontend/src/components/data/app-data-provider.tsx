@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { NoDatabaseError, loadLiveData, type ApiMemory } from "@/lib/backend";
 import { CATEGORIES } from "@/lib/demo-data";
+import { setDisplayCurrency } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 const SAMPLE_KEY = "sovra.data.v2";
@@ -73,10 +74,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [offline, address],
   );
   const fallback = isDemo ? sample : offlineData;
-  const data = useMemo<AppData>(
-    () => (live ? current : waiting ? { ...fallback, source: "loading" } : fallback),
-    [live, current, waiting, fallback],
-  );
+  const profileCurrency = auth.profile?.currency;
+  const data = useMemo<AppData>(() => {
+    const shown = live ? current : waiting ? { ...fallback, source: "loading" as const } : fallback;
+    // The demo story is in dollars; a real account without data yet still shows its chosen currency.
+    return !live && !isDemo && profileCurrency ? { ...shown, currency: profileCurrency } : shown;
+  }, [live, current, waiting, fallback, isDemo, profileCurrency]);
+  // Formatting reads this, so it is set before any screen renders.
+  setDisplayCurrency(data.currency);
 
   // Mutations read these without being re-created on every render.
   const liveRef = useRef(live);
