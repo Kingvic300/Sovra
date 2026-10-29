@@ -42,6 +42,10 @@ const EnvSchema = z.object({
   RATE_LIMIT_ASK_PER_HOUR: positiveInt(30),
   /** Statement uploads (previews included) per hour per user. Imports may call the AI model. */
   RATE_LIMIT_IMPORT_PER_HOUR: positiveInt(30),
+  /** Sui wallet syncs per hour per user. Each sync reads up to WALLET_SYNC_MAX_PAGES pages from Tatum. */
+  RATE_LIMIT_WALLET_SYNC_PER_HOUR: positiveInt(12),
+  /** Pages of 50 transactions read per wallet sync; the next sync continues from where this one stopped. */
+  WALLET_SYNC_MAX_PAGES: positiveInt(10),
   /** Ask Sovra questions per hour per IP from demo accounts, on top of the per-user limit (each demo is a new user). */
   RATE_LIMIT_DEMO_ASK_PER_HOUR: positiveInt(10),
   /** How long a demo account lives before it and its data are deleted. */

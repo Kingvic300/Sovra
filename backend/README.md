@@ -56,6 +56,8 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build and tests for the backend,
 | `RATE_LIMIT_DEMO_PER_HOUR` | no | `/auth/demo` per hour per IP. Defaults to `10`. |
 | `RATE_LIMIT_ASK_PER_HOUR` | no | `/ask` per hour per user. Defaults to `30`. |
 | `RATE_LIMIT_IMPORT_PER_HOUR` | no | `/transactions/import` (previews included) per hour per user. Defaults to `30`. |
+| `RATE_LIMIT_WALLET_SYNC_PER_HOUR` | no | `/wallet/sync` per hour per user. Defaults to `12`. |
+| `WALLET_SYNC_MAX_PAGES` | no | Pages of 50 transactions one sync reads. Defaults to `10`; longer histories continue on the next sync. |
 | `RATE_LIMIT_DEMO_ASK_PER_HOUR` | no | `/ask` per hour per IP from demo accounts, on top of the per-user limit. Defaults to `10`. |
 | `DEMO_TTL_HOURS` | no | How long a demo account lives. Defaults to `24`. |
 | `DATABASE_URL` | for data routes | Postgres connection string. |
@@ -84,7 +86,8 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | PUT | `/me/profile` | Saves onboarding answers; new goal, limit and payday also become goal/budget rows and memories |
 | GET | `/wallet/*` | Refused with `409 no_wallet` for email accounts: their address is only an id that nobody holds keys for |
 | GET | `/wallet/balance` | USDC balance at the user's address: `usdc` (exact decimal string) and `amount` (number) |
-| GET | `/wallet/transactions?limit=` | Recent USDC transfers in and out |
+| GET | `/wallet/transactions?limit=` | Recent USDC transfers in and out (live, not stored) |
+| POST | `/wallet/sync` | Imports USDC transfers into `transactions` under the user's "Sui wallet" account and refreshes its balance → `{account, imported, alreadyImported, skipped, pagesRead, complete, balanceStatus}`. Read-only, de-duplicated by digest, safe to repeat. `503` without Tatum, `403 demo_not_supported` for demos |
 | GET | `/wallet/deposit` | Address, network, token and coin type for the top-up screen |
 | GET | `/memories?kind=` | The user's memories, newest first, excluding forgotten ones |
 | POST | `/memories` | `{kind, text, source?}` → remembers something |
@@ -146,6 +149,8 @@ Each `POST /auth/demo` creates a new account for that visitor: a random Sui addr
 **Sign-in (Sui wallet).** The frontend connects a Sui wallet. To prove the address to this server, it asks `/auth/nonce` for a challenge, signs that exact string with `signPersonalMessage`, and posts it to `/auth/verify`. The server checks the signature with `verifyPersonalMessageSignature` from `@mysten/sui/verify`, passing a Sui GraphQL client so zkLogin-based wallets (which are verified on-chain) work too. Nonces are single-use and expire after five minutes. Signed-in wallet users are stored with `method: "google"`, a name left from the earlier zkLogin sign-in.
 
 **Tatum.** Tatum's Sui mainnet gateway currently exposes GraphQL at `https://sui-mainnet.gateway.tatum.io/graphql`; its `/_methods` list shows no JSON-RPC. Balances use the `@mysten/sui` GraphQL client's `core.getBalance`. Transfers come from a `transactions(filter: { affectedAddress })` query, reduced to USDC balance changes. USDC is Circle's native coin type `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC`. Without a Tatum key, sign-in verification falls back to the public `graphql.mainnet.sui.io` endpoint.
+
+**Sui sync.** `POST /wallet/sync` (`src/wallet/wallet-sync.service.ts`) pages backwards through `transactions(last: 50, before:, filter: { affectedAddress })` and stores each successful USDC movement as a transaction on the user's single `sui` account (a partial unique index allows only one). Amounts are signed dollars (USDC is treated as USD, rounded to cents; transfers under half a cent are skipped), the date is the checkpoint timestamp's UTC day, and the merchant is the counterparty (`USDC to 0x1a1a…1a1a`) with merchant key `sui:<address>`, so learned category rules and recurring detection work per counterparty. Without a rule, money in is `income` and money out is `transfer`. The digest is stored as `external_id`, unique per user, so repeated or concurrent syncs never duplicate a transfer. A sync stops paging when it reaches transfers it already has. If it runs out of pages first (`WALLET_SYNC_MAX_PAGES`), it saves the cursor in `accounts.sync_pending` and the next sync continues from there, so long histories arrive over several syncs without gaps. Failed transactions and transactions without a timestamp are skipped. Nothing is ever signed or sent. Once a Sui account exists, `/accounts/summary` counts its live balance, or the last synced balance if Tatum is unavailable, once. Tested against a fake GraphQL endpoint; the `pageInfo`/`before` paging hasn't yet been checked against Tatum's live gateway.
 
 **Walrus Memory.** One app account; each user gets the namespace `sovra-<address>`. Memories are sent as `[sovra:<kind>] <text>`, so recall results carry their kind. The relayer encrypts and stores each memory on Walrus. `remember` returns once the relayer accepts the job, and the upload finishes in the background (`status` goes `pending` → `stored` or `failed`).
 

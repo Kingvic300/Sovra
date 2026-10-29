@@ -109,6 +109,41 @@ describe("TatumService", () => {
     ]);
   });
 
+  it("pages backwards with last/before and reports whether older history exists", async () => {
+    const asked: unknown[] = [];
+    const service = withFakeClient({
+      query: async (...args: unknown[]) => {
+        asked.push((args[0] as { variables: unknown }).variables);
+        return {
+          data: {
+            transactions: {
+              pageInfo: { hasPreviousPage: true, startCursor: "cursor-50" },
+              nodes: [tx("d9", [{ owner: ME, coin: USDC_COIN_TYPE, amount: "2000000" }])],
+            },
+          },
+        };
+      },
+    });
+    const page = await service.getUsdcTransferPage(ME, { last: 50, before: "cursor-100" });
+    assert.deepEqual(asked, [{ address: ME, last: 50, before: "cursor-100" }]);
+    assert.deepEqual([page.before, page.hasOlder, page.transactionsSeen, page.transfers[0].amount], ["cursor-50", true, 1, "2"]);
+
+    const first = await service.getUsdcTransferPage(ME, { last: 50 });
+    assert.equal((asked[1] as { before: unknown }).before, null, "the first page asks for the newest transactions");
+    assert.equal(first.hasOlder, true);
+  });
+
+  it("treats a page without a cursor or without transactions as the start of history", async () => {
+    const empty = withFakeClient({
+      query: async () => ({ data: { transactions: { pageInfo: { hasPreviousPage: true, startCursor: null }, nodes: [] } } }),
+    });
+    assert.equal((await empty.getUsdcTransferPage(ME, { last: 50 })).hasOlder, false);
+    const end = withFakeClient({
+      query: async () => ({ data: { transactions: { pageInfo: { hasPreviousPage: false, startCursor: "c" }, nodes: [tx("d1", [])] } } }),
+    });
+    assert.equal((await end.getUsdcTransferPage(ME, { last: 50 })).hasOlder, false);
+  });
+
   it("reports GraphQL errors as upstream failures", async () => {
     const service = withFakeClient({ query: async () => ({ errors: [{ message: "bad filter" }] }) });
     await assert.rejects(
