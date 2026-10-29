@@ -38,7 +38,7 @@ export class BudgetsService {
     const today = now.toISOString().slice(0, 10);
     const renewals = new Map<string, { id: string; merchant: string; amount: number; date: string }[]>();
     if (to > today) {
-      for (const r of await this.recurring.active(address)) {
+      for (const r of await this.recurring.active(address, now)) {
         for (const date of expectedDates(r, from, to)) {
           const list = renewals.get(r.category) ?? [];
           list.push({ id: r.id, merchant: r.merchant, amount: r.amount, date });
