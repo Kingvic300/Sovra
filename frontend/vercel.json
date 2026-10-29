@@ -1,3 +1,6 @@
 {
-    "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+    "rewrites": [
+        { "source": "/api/:path*", "destination": "https://sovra-xck3.onrender.com/api/:path*" },
+        { "source": "/(.*)", "destination": "/index.html" }
+    ]
 }
