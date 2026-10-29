@@ -53,8 +53,17 @@ export const accounts = pgTable(
     name: text("name").notNull(),
     balance: numeric("balance", { precision: 14, scale: 2 }),
     syncedAt: timestamp("synced_at", { withTimezone: true }),
+    /**
+     * Sui accounts only: GraphQL cursors where a sync ran out of pages before reaching known
+     * history. The next sync continues from each, so long histories are imported over several syncs.
+     */
+    syncPending: jsonb("sync_pending").$type<string[]>().notNull().default([]),
   },
-  (t) => [index("accounts_user_idx").on(t.userAddress)],
+  (t) => [
+    index("accounts_user_idx").on(t.userAddress),
+    // One synced Sui wallet account per user, even if two syncs start at once.
+    uniqueIndex("accounts_user_sui_unique").on(t.userAddress).where(sql`${t.kind} = 'sui'`),
+  ],
 );
 
 export const transactions = pgTable(
@@ -72,9 +81,15 @@ export const transactions = pgTable(
     category: text("category").notNull(),
     learnedFromMemoryId: uuid("learned_from_memory_id"),
     raw: jsonb("raw").$type<Record<string, string>>(),
+    /** Id at the source, for de-duplication: the Sui transaction digest for synced transfers. Null for CSV rows. */
+    externalId: text("external_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("transactions_user_date_idx").on(t.userAddress, t.date), index("transactions_user_merchant_idx").on(t.userAddress, t.merchantKey)],
+  (t) => [
+    index("transactions_user_date_idx").on(t.userAddress, t.date),
+    index("transactions_user_merchant_idx").on(t.userAddress, t.merchantKey),
+    uniqueIndex("transactions_user_external_unique").on(t.userAddress, t.externalId),
+  ],
 );
 
 /** "Always file this merchant under this category", learned from the user's edits. */

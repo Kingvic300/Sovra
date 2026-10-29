@@ -1,10 +1,12 @@
-import { type CanActivate, Controller, type ExecutionContext, Get, Injectable, Query, UseGuards } from "@nestjs/common";
+import { type CanActivate, Controller, type ExecutionContext, Get, HttpCode, Injectable, Post, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { conflict } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { CurrentSession, type RequestWithSession, type Session } from "../auth/session.js";
 import { SessionGuard } from "../auth/session.guard.js";
+import { RateLimit } from "../security/rate-limit.js";
 import { TatumService, USDC_COIN_TYPE, USDC_DECIMALS } from "./tatum.service.js";
+import { WalletSyncService } from "./wallet-sync.service.js";
 
 const TransfersQuery = z.object({ limit: z.coerce.number().int().min(1).max(50).default(25) });
 
@@ -25,7 +27,10 @@ class HasWalletGuard implements CanActivate {
 @Controller("wallet")
 @UseGuards(SessionGuard, HasWalletGuard)
 export class WalletController {
-  constructor(private readonly tatum: TatumService) {}
+  constructor(
+    private readonly tatum: TatumService,
+    private readonly walletSync: WalletSyncService,
+  ) {}
 
   @Get("balance")
   async balance(@CurrentSession() session: Session) {
@@ -40,6 +45,17 @@ export class WalletController {
     @Query(new ZodPipe(TransfersQuery)) query: z.infer<typeof TransfersQuery>,
   ) {
     return { transfers: await this.tatum.getRecentUsdcTransfers(session.address, query.limit) };
+  }
+
+  /**
+   * Imports the wallet's USDC transfers into transactions (read-only) and refreshes the Sui
+   * account's balance. Safe to call repeatedly: transfers are de-duplicated by digest.
+   */
+  @Post("sync")
+  @HttpCode(200)
+  @RateLimit("walletSync")
+  sync(@CurrentSession() session: Session) {
+    return this.walletSync.sync(session);
   }
 
   /** What the top-up screen shows. Needs no Tatum key: it's the user's own address. */
