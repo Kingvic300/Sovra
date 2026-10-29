@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { normalizeSuiAddress, isValidSuiAddress } from "@mysten/sui/utils";
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, gt, isNotNull, lt, ne, sql, type SQL } from "drizzle-orm";
 import { badRequest, conflict, unauthorized } from "../common/errors.js";
 import { ENV, type Env } from "../config/env.js";
 import { DatabaseService } from "../database/database.service.js";
@@ -92,11 +92,7 @@ export class AuthService {
   async signUp(input: { email: string; password: string; name?: string }) {
     const db = this.database.db;
     const email = normalizeEmail(input.email);
-    const [taken] = await db
-      .select({ address: users.address })
-      .from(users)
-      .where(and(eq(users.method, "email"), eq(users.email, email)));
-    if (taken) throw conflict("An account with this email already exists. Sign in instead.", "email_taken");
+    if (await this.passwordAccount(email)) throw conflict("An account with this email already exists. Sign in instead.", "email_taken");
 
     const session: Session = {
       address: normalizeSuiAddress(`0x${randomBytes(32).toString("hex")}`),
@@ -114,16 +110,47 @@ export class AuthService {
     return session;
   }
 
+  /** Signs in to an email account, or to a wallet account that added email sign-in (it keeps its wallet). */
   async logIn(input: { email: string; password: string }) {
     const email = normalizeEmail(input.email);
+    const user = await this.passwordAccount(email);
+    const ok = await verifyPassword(input.password, user?.passwordHash ?? (await dummyHash()));
+    if (!user || !ok || user.method === "demo") throw unauthorized("That email and password don't match an account.");
+    const session: Session = { address: user.address, method: user.method, name: user.name ?? undefined, email };
+    return session;
+  }
+
+  /**
+   * Lets a wallet account also sign in with email and password, or changes them.
+   * The wallet still works; both sign-ins open the same account.
+   */
+  async setPassword(current: Session, input: { email: string; password: string }) {
+    if (current.method !== "google") throw badRequest("Only wallet accounts can add email sign-in.", "not_wallet_account");
+    const email = normalizeEmail(input.email);
+    const owner = await this.passwordAccount(email);
+    if (owner && owner.address !== current.address) {
+      throw conflict("Another account already signs in with this email.", "email_taken");
+    }
+    const updated = await this.database.db
+      .update(users)
+      .set({ email, passwordHash: await hashPassword(input.password) })
+      .where(eq(users.address, current.address))
+      .returning({ address: users.address })
+      // The unique index settles two accounts claiming one email at the same moment.
+      .catch(() => {
+        throw conflict("Another account already signs in with this email.", "email_taken");
+      });
+    if (updated.length === 0) throw unauthorized();
+    return { ...current, email };
+  }
+
+  /** The account that signs in with this email, if any. */
+  private async passwordAccount(email: string) {
     const [user] = await this.database.db
       .select()
       .from(users)
-      .where(and(eq(users.method, "email"), eq(users.email, email)));
-    const ok = await verifyPassword(input.password, user?.passwordHash ?? (await dummyHash()));
-    if (!user || !ok) throw unauthorized("That email and password don't match an account.");
-    const session: Session = { address: user.address, method: "email", name: user.name ?? undefined, email };
-    return session;
+      .where(and(eq(users.email, email), isNotNull(users.passwordHash), ne(users.method, "demo")));
+    return user;
   }
 
   /** A fresh, seeded demo account for this visitor. */
@@ -186,9 +213,12 @@ export class AuthService {
     const insert = this.database.db
       .insert(users)
       .values({ address: session.address, method: session.method, name: session.name, email: session.email });
-    const set = Object.fromEntries(
-      Object.entries({ name: session.name, email: session.email }).filter(([, value]) => value !== undefined),
-    );
+    const set: { name?: string; email?: SQL } = {};
+    if (session.name !== undefined) set.name = session.name;
+    // A sign-in email only changes through setPassword, never through a wallet sign-in.
+    if (session.email !== undefined) {
+      set.email = sql`case when ${users.passwordHash} is null then ${session.email} else ${users.email} end`;
+    }
     await (Object.keys(set).length
       ? insert.onConflictDoUpdate({ target: users.address, set })
       : insert.onConflictDoNothing());

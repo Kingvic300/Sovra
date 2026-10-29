@@ -29,6 +29,13 @@
       "when": 1793279888855,
       "tag": "0003_email_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793281476142,
+      "tag": "0004_password_email_index",
+      "breakpoints": true
     }
   ]
 }

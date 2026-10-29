@@ -36,9 +36,18 @@ export class MeService {
   ) {}
 
   async get(session: Session) {
-    if (!this.database.available) return { user: session, profile: null };
-    const [profile] = await this.database.db.select().from(profiles).where(eq(profiles.userAddress, session.address));
-    return { user: session, profile: profile ? this.toApi(profile) : null };
+    if (!this.database.available) return { user: session, profile: null, passwordEmail: null };
+    const db = this.database.db;
+    const [[profile], [user]] = await Promise.all([
+      db.select().from(profiles).where(eq(profiles.userAddress, session.address)),
+      db.select({ email: users.email, passwordHash: users.passwordHash }).from(users).where(eq(users.address, session.address)),
+    ]);
+    return {
+      user: session,
+      profile: profile ? this.toApi(profile) : null,
+      /** The email this account can sign in with, when it has a password. */
+      passwordEmail: user?.passwordHash ? user.email : null,
+    };
   }
 
   /**

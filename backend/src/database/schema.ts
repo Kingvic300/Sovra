@@ -9,9 +9,9 @@ export const users = pgTable(
     /** "google" is a wallet sign-in; the name is left from when wallets were zkLogin accounts. */
     method: text("method", { enum: ["google", "demo", "email"] }).notNull(),
     name: text("name"),
-    /** Lowercased for email accounts, which sign in with it. */
+    /** Lowercased when it is a sign-in email (password_hash set); display-only otherwise. */
     email: text("email"),
-    /** Email accounts only: scrypt hash (see auth/password.ts). */
+    /** Set for email accounts and for wallet accounts that added email sign-in. scrypt (see auth/password.ts). */
     passwordHash: text("password_hash"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** Demo accounts only: when the account and everything in it is deleted. Null for real users. */
@@ -19,7 +19,8 @@ export const users = pgTable(
   },
   (t) => [
     index("users_expires_at_idx").on(t.expiresAt),
-    uniqueIndex("users_email_account_idx").on(t.email).where(sql`${t.method} = 'email'`),
+    // One account per sign-in email, whether it was created with email or added to a wallet account.
+    uniqueIndex("users_password_email_idx").on(t.email).where(sql`${t.passwordHash} is not null`),
   ],
 );
 

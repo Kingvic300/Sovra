@@ -56,7 +56,7 @@ describe("auth and sessions (with database)", () => {
 
     const me = await client.get("/me");
     assert.equal(me.status, 200);
-    assert.deepEqual(me.body, { user: { address, method: "google", name: "Ada Okafor", email: "ada@example.com" }, profile: null });
+    assert.deepEqual(me.body, { user: { address, method: "google", name: "Ada Okafor", email: "ada@example.com" }, profile: null, passwordEmail: null });
 
     const [row] = await database.db.select().from(users).where(eq(users.address, address));
     assert.equal(row.method, "google");

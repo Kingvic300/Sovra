@@ -1,10 +1,11 @@
-import { Body, Controller, HttpCode, Post, Res } from "@nestjs/common";
+import { Body, Controller, HttpCode, Post, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { z } from "zod";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { RateLimit } from "../security/rate-limit.js";
 import { AuthService } from "./auth.service.js";
-import { SESSION_COOKIE, type Session } from "./session.js";
+import { SessionGuard } from "./session.guard.js";
+import { CurrentSession, SESSION_COOKIE, type Session } from "./session.js";
 
 const NonceBody = z.object({ address: z.string().min(3) });
 const VerifyBody = z.object({
@@ -59,6 +60,19 @@ export class AuthController {
   @RateLimit("auth")
   async logIn(@Body(new ZodPipe(LogInBody)) body: z.infer<typeof LogInBody>, @Res({ passthrough: true }) res: Response) {
     return this.startSession(await this.auth.logIn(body), res);
+  }
+
+  /** Adds email sign-in to the signed-in wallet account, or changes its email and password. */
+  @Post("password")
+  @HttpCode(200)
+  @RateLimit("auth")
+  @UseGuards(SessionGuard)
+  async setPassword(
+    @CurrentSession() current: Session,
+    @Body(new ZodPipe(SignUpBody.omit({ name: true }))) body: { email: string; password: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.startSession(await this.auth.setPassword(current, body), res);
   }
 
   @Post("demo")

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { eq } from "drizzle-orm";
 import { users } from "../database/schema.js";
-import { createTestApp, FakeTatum, type TestApp } from "../testing/test-app.js";
+import { createTestApp, FakeTatum, signIn, type TestApp } from "../testing/test-app.js";
 import { createTestDatabase, type TestDatabase } from "../testing/test-database.js";
 
 describe("email and password accounts", () => {
@@ -78,5 +78,39 @@ describe("email and password accounts", () => {
     const accounts = await client.get("/accounts");
     assert.equal(accounts.body.wallet.status, "no_wallet");
     assert.equal(accounts.body.wallet.usdc, null);
+  });
+
+  it("lets a wallet account add email sign-in, then open the same account with it", async () => {
+    const wallet = api.client();
+    const { address } = await signIn(wallet);
+    const added = await wallet.post("/auth/password", { email: "Ed@Example.com", password: "ed password 1" });
+    assert.equal(added.status, 200);
+    assert.equal(added.body.user.email, "ed@example.com");
+    assert.equal((await wallet.get("/me")).body.passwordEmail, "ed@example.com");
+
+    const other = api.client();
+    const res = await other.post("/auth/login", { email: "ed@example.com", password: "ed password 1" });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.user.address, address);
+    assert.equal(res.body.user.method, "google", "it stays a wallet account");
+    assert.equal((await other.get("/wallet/balance")).status, 200, "and keeps its wallet");
+  });
+
+  it("refuses an email another account already signs in with", async () => {
+    const wallet = api.client();
+    await signIn(wallet);
+    const res = await wallet.post("/auth/password", { email: "ada@example.com", password: "long enough" });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, "email_taken");
+    const signup = await api.client().post("/auth/signup", { email: "ed@example.com", password: "long enough" });
+    assert.equal(signup.status, 409, "a linked email can't be used for a new account");
+  });
+
+  it("only lets wallet accounts add email sign-in", async () => {
+    const client = api.client();
+    await client.post("/auth/signup", { email: "fi@example.com", password: "fi password 1" });
+    const res = await client.post("/auth/password", { email: "fi2@example.com", password: "fi password 2" });
+    assert.equal(res.status, 400);
+    assert.equal((await api.client().post("/auth/password", { email: "x@example.com", password: "long enough" })).status, 401);
   });
 });

@@ -7,7 +7,8 @@ import { CATEGORY_IDS } from "../shared/categories.js";
 import { MeService } from "./me.service.js";
 
 const ProfileBody = z.object({
-  name: z.string().trim().min(1).max(80),
+  /** May be empty: wallet users who skip setup haven't given a name yet. */
+  name: z.string().trim().max(80),
   onboarded: z.boolean(),
   goal: z
     .object({
