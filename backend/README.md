@@ -22,6 +22,7 @@ Only `SESSION_SECRET` is required. Any integration without keys answers `503 {"e
 | `npm run build` | Compile to `dist/` |
 | `npm run start:prod` | Run `dist/main.js` (reads `.env` if present) |
 | `npm run demo:cleanup` | Delete expired demo accounts once (after `build`). For a cron job |
+| `npm run jobs:run` | Run all scheduled jobs once (after `build`): demo cleanup and reminders. For a cron job |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Unit and integration tests (see below) |
 | `npm run db:generate` | Create a migration from `src/database/schema.ts` |
@@ -59,6 +60,9 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build and tests for the backend,
 | `RATE_LIMIT_WALLET_SYNC_PER_HOUR` | no | `/wallet/sync` per hour per user. Defaults to `12`. |
 | `WALLET_SYNC_MAX_PAGES` | no | Pages of 50 transactions one sync reads. Defaults to `10`; longer histories continue on the next sync. |
 | `RATE_LIMIT_DEMO_ASK_PER_HOUR` | no | `/ask` per hour per IP from demo accounts, on top of the per-user limit. Defaults to `10`. |
+| `CRON_SECRET` | for the job endpoint | Bearer secret for `POST /internal/jobs/run`, at least 32 characters. Unset turns the endpoint off (404). |
+| `JOBS_INTERVAL_MINUTES` | no | Run jobs inside the API process every N minutes. `0` (default) is off; only for always-on hosts. |
+| `REMINDER_DAYS_AHEAD` | no | Remind about renewals due within this many days. Defaults to `3`. |
 | `DEMO_TTL_HOURS` | no | How long a demo account lives. Defaults to `24`. |
 | `DATABASE_URL` | for data routes | Postgres connection string. |
 | `TATUM_API_KEY` | for wallet reads | Sent as `x-api-key` to Tatum's Sui gateway. |
@@ -114,6 +118,9 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | GET | `/recurring` | Repeating charges detected from the last 120 days, each with a stable `id`, `status` (`active` or `paused`) and `pausedAt` |
 | POST | `/recurring/:id/pause` | Stops Sovra counting the charge in projections, upcoming bills and reminders → `{recurring, changed, memory, note}`. Doesn't cancel anything with the merchant (`note` says so). Repeating it changes nothing |
 | POST | `/recurring/:id/resume` | Counts it again |
+| GET | `/reminders` | Open in-app reminders, refreshed on read → `{reminders: [{id, kind, title, body, tone, to, dueDate, createdAt}]}` (`tone`: `over` or `caution`, like the bell's alerts) |
+| POST | `/reminders/:id/dismiss` | Hides a reminder for good |
+| POST | `/internal/jobs/run` | `Authorization: Bearer <CRON_SECRET>`. Runs the scheduled jobs once → `{demoAccountsDeleted, reminders: {users, created, updated, resolved, failed}, durationMs}`. No session; `404` without `CRON_SECRET` |
 | POST | `/ask` | `{question}` → `{answer, usedMemories: [{id, text}], model, id, createdAt}`. `503 not_configured` without `GROQ_API_KEY`, `429 rate_limited`, `502 ai_upstream_error`. Answered questions are saved to history (`id` is null without a database) |
 | GET | `/ask/history?limit=&before=` | `{messages, nextCursor}`: saved questions and answers, newest first. `limit` 1 to 50 (default 20); pass `nextCursor` as `before` for the next page |
 | DELETE | `/ask/history` | Clears the user's Ask history → `{deleted}` |
@@ -149,6 +156,23 @@ Known limitation: counters live in process memory. Each instance counts separate
 - **Lower** when spending stayed under 60% of the limit in all 3 months (and wasn't zero). The new limit is the highest month plus 20%, rounded up to $10, never below $10, and only if this month's projected spending (spent + renewals still due) fits under it.
 
 Without transactions going back to the start of the first of those months, there are no suggestions. Ids are `category:direction:to`, so the same data always gives the same ids. Accepting or dismissing stores a decision (`budget_suggestion_decisions`) and a memory, best-effort. A dismissed category and direction stays hidden for 90 days, even if the limit changes.
+
+## Reminders and scheduled jobs
+
+Reminders (`src/reminders/reminders.module.ts`) come from the database only (recurring detection and budget projections), so generating them never calls Groq, Walrus or Tatum.
+
+- **renewal:** an active recurring charge due within `REMINDER_DAYS_AHEAD` days ("Netflix renews on 16 Jun"). Paused charges never get one.
+- **budget_over:** a budget whose projected spending this month (spent plus active renewals still due) is over its limit. One per category per month; its text follows the latest numbers.
+
+A unique key `(user, kind, ref, due_date)` makes generation idempotent: running it twice, or twice at once, creates nothing new. When the reason goes away (a charge is paused, a budget is back under its limit) the reminder is marked resolved, and it reopens if the reason comes back. Dismissed reminders stay dismissed. Reminders are deleted with their account.
+
+**Running the jobs.** The backend has no deployment target yet (see #12), and nothing here assumes an always-on process. The job (delete expired demos, then refresh every live user's reminders) is idempotent and can be triggered three ways:
+
+1. `GET /reminders` refreshes the signed-in user's reminders before answering, so in-app reminders are current even if no scheduler runs at all.
+2. A cron calls `POST /api/internal/jobs/run` with `Authorization: Bearer $CRON_SECRET` (Render or Railway cron jobs, Vercel Cron, GitHub Actions `schedule`, cron-job.org), or runs `npm run jobs:run` on a machine with the database URL. Hourly is plenty.
+3. On an always-on host only, `JOBS_INTERVAL_MINUTES=60` runs it inside the API process. Runs never overlap. With several instances each runs it, which is harmless because the job is idempotent.
+
+To try it locally without any paid service: set `DATABASE_URL` and `CRON_SECRET`, then `curl -X POST -H "Authorization: Bearer $CRON_SECRET" localhost:8787/api/internal/jobs/run`.
 
 ## Demo accounts
 
