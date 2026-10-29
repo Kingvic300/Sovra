@@ -242,7 +242,7 @@ function OnboardingFlow() {
                 {(
                   [
                     { key: "sui", icon: Wallet, title: "USDC on Sui", body: `Read live through Tatum at ${shortAddress(session.address)}.` },
-                    { key: "csv", icon: FileSpreadsheet, title: "Bank statements", body: "Upload a CSV export from any bank." },
+                    { key: "csv", icon: FileSpreadsheet, title: "Bank statements", body: "Upload a CSV, Excel or PDF statement from any bank." },
                   ] as const
                 )
                   // Email accounts have no wallet, so only statements apply.

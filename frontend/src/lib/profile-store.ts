@@ -26,13 +26,15 @@ export function writeProfile(address: string, profile: Profile) {
   localStorage.setItem(profileKey(address), JSON.stringify(profile));
 }
 
-export type EmailSession = { address: string; email: string; name: string };
+/** `method` is the account type: an email account, or a wallet account that added email sign-in. */
+export type EmailSession = { address: string; email: string; name: string; method: "email" | "wallet" };
 
 /** Who signed in with email in this browser. The backend cookie is what actually authorizes requests. */
 export function readEmailSession(): EmailSession | null {
   try {
     const raw = localStorage.getItem(EMAIL_SESSION);
-    return raw ? (JSON.parse(raw) as EmailSession) : null;
+    // Sessions saved before wallet accounts could sign in with email were all email accounts.
+    return raw ? { method: "email", ...(JSON.parse(raw) as Partial<EmailSession>) } as EmailSession : null;
   } catch {
     return null;
   }

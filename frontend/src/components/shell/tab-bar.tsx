@@ -156,7 +156,7 @@ export function TabBar({ stats }: { stats: ShellStats }) {
         <SheetRow icon={MessageSquareText} title="Ask Sovra" body="A question about your money" onClick={() => go("/app/ask")} />
         <SheetRow icon={ChartPie} title="Add a budget" body="Set a monthly limit" onClick={() => openDialog("budget")} />
         <SheetRow icon={Target} title="Add a goal" body="Something you're saving for" onClick={() => openDialog("goal")} />
-        <SheetRow icon={Upload} title="Import a statement" body="Upload a CSV from your bank" onClick={() => go("/app/accounts")} />
+        <SheetRow icon={Upload} title="Import a statement" body="Upload a CSV, Excel or PDF from your bank" onClick={() => go("/app/accounts")} />
       </BottomSheet>
 
       <BottomSheet open={sheet === "more"} onClose={() => setSheet(null)} title="More">

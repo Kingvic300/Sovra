@@ -19,7 +19,7 @@ export default function AccountsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Accounts"
-        description="Import bank statements as CSV and connect a Sui wallet. Sovra never moves money. It only reads."
+        description="Import bank statements (CSV, Excel or PDF) and connect a Sui wallet. Sovra never moves money. It only reads."
       />
 
       <div className="grid gap-5 lg:grid-cols-2">

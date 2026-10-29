@@ -35,8 +35,7 @@ async function currentServerUser(): Promise<ServerUser | null> {
 function matches(user: ServerUser | null, session: Session) {
   if (!user) return false;
   if (session.method === "demo") return user.method === "demo";
-  const method = session.method === "email" ? "email" : "google";
-  return user.method === method && normalizeSuiAddress(user.address) === normalizeSuiAddress(session.address);
+  return user.method !== "demo" && normalizeSuiAddress(user.address) === normalizeSuiAddress(session.address);
 }
 
 /**
@@ -53,8 +52,8 @@ export async function ensureServerSession(
       await api("/auth/demo", { method: "POST" });
       return "verified";
     }
-    // An email session can only be restored by signing in again with the password.
-    if (session.method === "email") return "failed";
+    // A password session can only be restored by signing in again with the password.
+    if (session.viaPassword) return "failed";
     const { message } = await api<{ message: string }>("/auth/nonce", { method: "POST", json: { address: session.address } });
     const signature = await sign(new TextEncoder().encode(message));
     await api("/auth/verify", {

@@ -124,7 +124,7 @@ export function TransactionsTable() {
           </div>
           <Link to="/app/accounts" className={`${buttonClass("secondary")} ml-auto shrink-0 px-3 pointer-coarse:min-w-11 sm:px-4`}>
             <Upload className="size-4" aria-hidden />
-            <span className="sr-only sm:not-sr-only">Import CSV</span>
+            <span className="sr-only sm:not-sr-only">Import statement</span>
           </Link>
         </div>
 

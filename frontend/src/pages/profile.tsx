@@ -12,6 +12,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { EmailSignInDialog } from "@/components/auth/email-sign-in-dialog";
 import { Button } from "@/components/ui/button";
 import { buttonClass } from "@/components/ui/button-class";
 import { fieldClass } from "@/components/ui/field-class";
@@ -29,11 +30,13 @@ import { useTitle } from "@/lib/use-title";
 
 const SOURCES = [
   { key: "sui", icon: Wallet, title: "USDC on Sui", body: "Read live through Tatum." },
-  { key: "csv", icon: FileSpreadsheet, title: "Bank statements", body: "CSV exports you upload." },
+  { key: "csv", icon: FileSpreadsheet, title: "Bank statements", body: "CSV, Excel or PDF statements you upload." },
 ] as const;
 
 function methodLabel(session: Session) {
-  return session.method === "wallet" ? "Sui wallet" : session.method === "email" ? "Email and password" : "Demo account";
+  if (session.method === "demo") return "Demo account";
+  if (session.viaPassword) return session.method === "wallet" ? "Email and password (wallet account)" : "Email and password";
+  return "Sui wallet";
 }
 
 function IdentityCard({ session, name }: { session: Session; name: string }) {
@@ -239,6 +242,7 @@ export default function ProfilePage() {
   const auth = useAuth();
   const { data } = useAppData();
   const navigate = useNavigate();
+  const [linking, setLinking] = useState(false);
   const toast = useToast();
 
   // Route guards can be off in development, so the page also renders signed out.
@@ -282,18 +286,38 @@ export default function ProfilePage() {
           <Panel title="Sign-in">
             <dl className="divide-y divide-line">
               <Row label="Signed in with">{auth.session ? methodLabel(session) : "Not signed in"}</Row>
+              {session.method === "wallet" && (
+                <Row label="Email sign-in">
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:justify-end">
+                    <span className={auth.passwordEmail ? "" : "font-normal text-muted"}>{auth.passwordEmail ?? "Not set up"}</span>
+                    <button
+                      type="button"
+                      onClick={() => setLinking(true)}
+                      disabled={auth.server !== "verified"}
+                      className="text-[14px] font-semibold text-cobalt hover:underline disabled:opacity-50 disabled:hover:no-underline"
+                    >
+                      {auth.passwordEmail ? "Change" : "Add email and password"}
+                    </button>
+                  </span>
+                </Row>
+              )}
               <Row label="Session">Kept in this browser until you log out</Row>
-              <Row label={session.method === "wallet" ? "Address ownership" : "Server session"}>
+              <Row label={session.method === "wallet" && !session.viaPassword ? "Address ownership" : "Server session"}>
                 <span className={SERVER_STATUS[auth.server].tone}>
-                  {auth.server === "verified" && session.method === "wallet" ? "Verified by signature" : SERVER_STATUS[auth.server].text}
+                  {auth.server === "verified" && session.method === "wallet" && !session.viaPassword
+                    ? "Verified by signature"
+                    : SERVER_STATUS[auth.server].text}
                 </span>
               </Row>
             </dl>
             <p className="mt-4 rounded-xl bg-porcelain px-4 py-3 text-[14px] text-muted">
-              {session.method === "wallet"
-                ? "Your wallet signed a one-time message to prove the address is yours. Sovra never sees your keys and can't move money."
-                : "The demo account uses sample data. It's private to you and is deleted when it expires."}
+              {session.method === "demo"
+                ? "The demo account uses sample data. It's private to you and is deleted when it expires."
+                : session.viaPassword
+                  ? "Your password is stored only as a scrypt hash, so Sovra can check it but never read it."
+                  : "Your wallet signed a one-time message to prove the address is yours. Sovra never sees your keys and can't move money."}
             </p>
+            <EmailSignInDialog open={linking} onClose={() => setLinking(false)} />
           </Panel>
 
           <Panel

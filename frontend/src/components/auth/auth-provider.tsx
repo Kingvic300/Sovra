@@ -16,6 +16,9 @@ import {
 import { endServerSession, ensureServerSession, type ServerSession } from "@/lib/server-session";
 import { useToast } from "@/lib/toast-context";
 
+/** What the email routes answer with. "google" is a wallet account. */
+type ServerUser = { address: string; email: string; name?: string; method: "google" | "email" };
+
 const DEMO_ADDRESS = ACCOUNTS.find((a) => a.source === "tatum")!.address!;
 
 const DEMO_SESSION: Session = {
@@ -39,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const connection = useWalletConnection();
   const [demo, setDemo] = useState(readDemoFlag);
   const [emailSession, setEmailSession] = useState(readEmailSession);
+  const [passwordLogin, setPasswordLogin] = useState<{ address: string; email: string | null } | null>(null);
   // Bumped after saving so the profile is re-read from storage.
   const [profileRevision, setProfileRevision] = useState(0);
   const [server, setServer] = useState<{ address: string; status: ServerSession } | null>(null);
@@ -52,7 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const session: Session | null = useMemo(() => {
     if (walletAddress) return { method: "wallet", address: walletAddress, name: "" };
-    if (emailSession) return { method: "email", ...emailSession };
+    if (emailSession) {
+      const { method, ...rest } = emailSession;
+      return { method, ...rest, viaPassword: true };
+    }
     return demo ? DEMO_SESSION : null;
   }, [walletAddress, emailSession, demo]);
 
@@ -64,7 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (status) => {
         // The saved profile lives on the backend; keep the browser copy in step with it.
         if (status === "verified") {
-          const me = await api<{ profile: Profile | null }>("/me").catch(() => null);
+          const me = await api<{ profile: Profile | null; passwordEmail?: string | null }>("/me").catch(() => null);
+          if (!cancelled && me) setPasswordLogin({ address: session.address, email: me.passwordEmail ?? null });
           if (!cancelled && me?.profile) {
             writeProfile(session.address, me.profile);
             setProfileRevision((n) => n + 1);
@@ -72,13 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if (cancelled) return;
         setServer({ address: session.address, status });
-        if (status === "failed" && session.method === "email") {
+        if (status === "failed" && session.viaPassword) {
           // The cookie expired or was cleared; only the password can start a new one.
           writeEmailSession(null);
           setEmailSession(null);
           toast.info({ title: "Your session ended", description: "Sign in again with your email and password." });
         }
-        if (status === "failed" && session.method === "wallet") {
+        if (status === "failed" && session.method === "wallet" && !session.viaPassword) {
           toast.error({
             title: "Sovra couldn't confirm your wallet",
             description: `Sign the message in ${walletName} so Sovra can load your data. It's free and can't move money.`,
@@ -105,14 +113,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (wallet: UiWallet) => {
       writeDemoFlag(false);
       setDemo(false);
+      writeEmailSession(null);
+      setEmailSession(null);
       await dAppKit.connectWallet({ wallet });
     },
     [dAppKit],
   );
 
   /** Both email routes answer `{ user }` and set the session cookie. */
-  const startEmailSession = useCallback((user: { address: string; email: string; name?: string }) => {
-    const next: EmailSession = { address: user.address, email: user.email, name: user.name ?? "" };
+  const startEmailSession = useCallback((user: ServerUser) => {
+    const next: EmailSession = {
+      address: user.address,
+      email: user.email,
+      name: user.name ?? "",
+      method: user.method === "email" ? "email" : "wallet",
+    };
     writeDemoFlag(false);
     setDemo(false);
     writeEmailSession(next);
@@ -122,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUpWithEmail = useCallback<AuthState["signUpWithEmail"]>(
     async (input) => {
-      const { user } = await api<{ user: { address: string; email: string; name?: string } }>("/auth/signup", {
+      const { user } = await api<{ user: ServerUser }>("/auth/signup", {
         method: "POST",
         json: input,
       });
@@ -133,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = useCallback<AuthState["signInWithEmail"]>(
     async (input) => {
-      const { user } = await api<{ user: { address: string; email: string; name?: string } }>("/auth/login", {
+      const { user } = await api<{ user: ServerUser }>("/auth/login", {
         method: "POST",
         json: input,
       });
@@ -141,6 +156,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [startEmailSession],
   );
+
+  const setEmailSignIn = useCallback<AuthState["setEmailSignIn"]>(
+    async (input) => {
+      const { user } = await api<{ user: ServerUser }>("/auth/password", { method: "POST", json: input });
+      setPasswordLogin({ address: user.address, email: user.email });
+      if (emailSession) startEmailSession(user);
+    },
+    [emailSession, startEmailSession],
+  );
+
+  const passwordEmail = session && passwordLogin?.address === session.address ? passwordLogin.email : null;
 
   const startDemo = useCallback(() => {
     writeDemoFlag(true);
@@ -179,11 +205,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithWallet,
       signUpWithEmail,
       signInWithEmail,
+      passwordEmail,
+      setEmailSignIn,
       startDemo,
       signOut,
       saveProfile,
     }),
-    [status, session, profile, serverStatus, signInWithWallet, signUpWithEmail, signInWithEmail, startDemo, signOut, saveProfile],
+    [
+      status,
+      session,
+      profile,
+      serverStatus,
+      signInWithWallet,
+      signUpWithEmail,
+      signInWithEmail,
+      passwordEmail,
+      setEmailSignIn,
+      startDemo,
+      signOut,
+      saveProfile,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

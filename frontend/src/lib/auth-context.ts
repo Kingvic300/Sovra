@@ -14,6 +14,8 @@ export type Session = {
   address: string;
   name: string;
   email?: string;
+  /** Opened with email and password. A wallet account opened this way keeps its wallet but has no wallet to sign with. */
+  viaPassword?: boolean;
 };
 
 export type Profile = {
@@ -37,6 +39,10 @@ export type AuthState = {
   /** Create an email account or sign in to one. Rejects with ApiError, e.g. code "email_taken". */
   signUpWithEmail: (input: { name: string; email: string; password: string }) => Promise<void>;
   signInWithEmail: (input: { email: string; password: string }) => Promise<void>;
+  /** The email this account can sign in with, once it has a password. */
+  passwordEmail: string | null;
+  /** Adds email and password sign-in to a wallet account, or changes them. */
+  setEmailSignIn: (input: { email: string; password: string }) => Promise<void>;
   startDemo: () => void;
   signOut: () => Promise<void>;
   /** Saves in the browser, and on the backend when it has a session. Rejects if the backend refuses. */

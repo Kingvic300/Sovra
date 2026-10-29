@@ -11,6 +11,11 @@ type PreviewRow = { date: string; merchant: string; amount: number; category: Ca
 type Preview = { total: number; closingBalance: number | null; rows: PreviewRow[]; skipped: { line: number; reason: string }[] };
 type Imported = { imported: number; account: { name: string }; categorizedBy: { rules: number; ai: number; keywords: number } };
 
+/** Statement files the backend reads: CSV as is, the first table in an Excel workbook, a PDF's text through the AI model. */
+const ACCEPTED = /\.(csv|xlsx|pdf)$/i;
+const ACCEPT_ATTR =
+  ".csv,.xlsx,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 /** Sends the statement to the backend. With `preview`, nothing is saved. */
 function upload<T>(file: File, preview: boolean) {
   const body = new FormData();
@@ -35,8 +40,15 @@ export function CsvDrop() {
   async function pick(files: FileList | null) {
     const f = files?.[0];
     if (!f) return;
-    if (!f.name.toLowerCase().endsWith(".csv")) {
-      toast.error({ title: `${f.name} isn't a CSV file`, description: "Export your statement as CSV from your bank and try again." });
+    if (!ACCEPTED.test(f.name)) {
+      toast.error({
+        title: `Sovra can't read ${f.name}`,
+        description: "Upload a CSV, Excel (.xlsx) or PDF statement from your bank.",
+      });
+      return;
+    }
+    if (/\.pdf$/i.test(f.name) && !live) {
+      toast.error({ title: "PDFs need a signed-in account", description: "The demo reads CSV and Excel files. Sign in to import a PDF." });
       return;
     }
     if (f.size > 5 * 1024 * 1024) {
@@ -138,15 +150,18 @@ export function CsvDrop() {
     >
       <Upload className="size-5 text-cobalt" aria-hidden />
       {busy ? (
-        <p className="mt-2">Reading {file?.name}…</p>
+        <p className="mt-2">
+          Reading {file?.name}…
+          {file && /\.pdf$/i.test(file.name) && <span className="block text-[13px] text-muted">PDFs can take up to a minute.</span>}
+        </p>
       ) : file ? (
         <p className="mt-2">
           <span className="font-semibold">{file.name}</span> is ready. Sovra will match columns and show a preview before importing.
         </p>
       ) : (
         <>
-          <p className="mt-2 font-semibold">Drop a statement CSV here</p>
-          <p className="text-[13px] text-muted">Date, description and amount columns are enough.</p>
+          <p className="mt-2 font-semibold">Drop a bank statement here</p>
+          <p className="text-[13px] text-muted">CSV, Excel (.xlsx) or PDF. Date, description and amount are enough.</p>
         </>
       )}
       <button
@@ -157,7 +172,7 @@ export function CsvDrop() {
       >
         {file ? "Choose a different file" : "Choose file"}
       </button>
-      <input ref={input} type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => void pick(e.target.files)} />
+      <input ref={input} type="file" accept={ACCEPT_ATTR} className="sr-only" onChange={(e) => void pick(e.target.files)} />
     </div>
   );
 }
