@@ -39,7 +39,8 @@ const SYSTEM_PROMPT = `You are Sovra, a read-only personal finance assistant.
 - Use what the user told Sovra (memories) to personalise the answer, and mention it when it matters.
 - Never give investment, tax or legal advice. For those, suggest a qualified professional.
 - You cannot move, send, pause or cancel anything. Never claim you did; tell the user what they could do.
-- Amounts are in the currency named by context.currency (an ISO code such as NGN or USD), unless an item gives its own "currency". Write amounts with that currency's symbol, never assume dollars. suiWalletUsdc is USDC, a US dollar stablecoin.`;
+- Amounts are in the currency named by context.currency (an ISO code such as NGN or USD), unless an item gives its own "currency". Write amounts with that currency's symbol, never assume dollars. suiWalletUsdc is USDC, a US dollar stablecoin.
+- totalBalance is what the user has across accounts, in context.currency; accounts lists each one in its own currency. balancesNotCounted names accounts whose balance is unknown, so the total leaves them out.`;
 
 const CATEGORIZE_PROMPT = `You sort bank statement merchants into spending categories for a personal finance app.
 Return one category for every merchantKey you are given, using only these ids:

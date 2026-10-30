@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Module, Post, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
+import { AccountsModule } from "../accounts/accounts.module.js";
 import { AiModule } from "../ai/ai.module.js";
 import { CurrentSession, type Session } from "../auth/session.js";
 import { SessionGuard } from "../auth/session.guard.js";
@@ -44,7 +45,7 @@ export class AskController {
 }
 
 @Module({
-  imports: [AiModule, MemoryModule, BudgetsModule, GoalsModule, RecurringModule, TransactionsModule, WalletModule],
+  imports: [AccountsModule, AiModule, MemoryModule, BudgetsModule, GoalsModule, RecurringModule, TransactionsModule, WalletModule],
   controllers: [AskController],
   providers: [AskService],
 })
