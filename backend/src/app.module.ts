@@ -5,6 +5,7 @@ import { AskModule } from "./ask/ask.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { BudgetsModule } from "./budgets/budgets.module.js";
 import { ConfigModule } from "./config/config.module.js";
+import { CutsModule } from "./cuts/cuts.module.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { GoalsModule } from "./goals/goals.module.js";
 import { HealthController } from "./health.controller.js";
@@ -31,6 +32,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     TransactionsModule,
     AccountsModule,
     BudgetsModule,
+    CutsModule,
     GoalsModule,
     RecurringModule,
     RemindersModule,

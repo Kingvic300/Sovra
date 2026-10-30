@@ -17,6 +17,8 @@ import { TatumService } from "../wallet/tatum.service.js";
 const MEMORY_LIMIT = 6;
 const RECENT_TRANSACTIONS = 15;
 const UPCOMING_DAYS = 30;
+/** Merchants listed with their month's total, so "what can I cut?" has more than the latest few rows. */
+const TOP_MERCHANTS = 12;
 
 @Injectable()
 export class AskService {
@@ -62,7 +64,7 @@ export class AskService {
 
     const db = this.database.available;
     const hasWallet = this.tatum.configured && session.method !== "email";
-    const [memories, profile, budgets, goals, recent, upcoming, balances, walletOnly] = await Promise.all([
+    const [memories, profile, budgets, goals, recent, monthSpending, upcoming, balances, walletOnly] = await Promise.all([
       attempt("memories", await this.memory.availableFor(session.address), () =>
         this.memory.recall(session.address, question, MEMORY_LIMIT),
       ),
@@ -75,6 +77,7 @@ export class AskService {
       attempt("recent transactions", db, () =>
         this.transactions.list(session.address, { month, limit: RECENT_TRANSACTIONS }),
       ),
+      attempt("spending by merchant", db, () => this.transactions.list(session.address, { month, limit: 500 })),
       attempt("upcoming bills", db, async () => {
         const horizon = new Date(Date.now() + UPCOMING_DAYS * 86_400_000).toISOString().slice(0, 10);
         // Paused charges are ones the user told Sovra to stop counting.
@@ -93,7 +96,7 @@ export class AskService {
     const currency = await this.currencies.forUser(session.address);
     context.currency = currency;
     const accountCurrency = new Map<string, string>();
-    if (recent && db) {
+    if ((recent || monthSpending) && db) {
       const rows = await this.database.db
         .select({ id: accounts.id, currency: accounts.currency })
         .from(accounts)
@@ -107,7 +110,17 @@ export class AskService {
       context.totalBalance = balances.total;
       if (balances.notCounted.length) context.balancesNotCounted = balances.notCounted;
     }
-    if (budgets) context.budgetsThisMonth = budgets.budgets.map(({ label, limit, spent }) => ({ label, limit, spent }));
+    if (budgets) {
+      // projected = spent + renewals still due this month, which is what decides whether a budget goes over.
+      context.budgetsThisMonth = budgets.budgets.map(({ label, limit, spent, projected, renewals }) => ({
+        label,
+        limit,
+        spent,
+        projected,
+        renewalsStillDue: renewals.map(({ merchant, amount, date }) => ({ merchant, amount, date })),
+      }));
+    }
+    if (monthSpending) context.spendingByMerchantThisMonth = topMerchants(monthSpending, accountCurrency, currency);
     if (goals) context.goals = goals.map(({ name, target, saved, due, weekly }) => ({ name, target, saved, due, weekly }));
     if (recent) {
       context.recentTransactions = recent.map(({ date, merchant, category, amount, accountId }) => ({
@@ -208,4 +221,23 @@ export class AskService {
     const deleted = await this.database.db.delete(askMessages).where(eq(askMessages.userAddress, address)).returning({ id: askMessages.id });
     return { deleted: deleted.length };
   }
+}
+
+/** The month's biggest merchants by money out, per currency, with how many times the user paid them. */
+function topMerchants(
+  rows: { merchant: string; category: string; amount: number; accountId: string | null }[],
+  accountCurrency: Map<string, string>,
+  currency: string,
+) {
+  const totals = new Map<string, { merchant: string; category: string; currency: string; spent: number; times: number }>();
+  for (const r of rows) {
+    if (r.amount >= 0) continue;
+    const cur = accountCurrency.get(r.accountId ?? "") ?? currency;
+    const key = `${r.merchant}|${cur}`;
+    const t = totals.get(key) ?? { merchant: r.merchant, category: r.category, currency: cur, spent: 0, times: 0 };
+    t.spent = Math.round((t.spent - r.amount) * 100) / 100;
+    t.times++;
+    totals.set(key, t);
+  }
+  return [...totals.values()].sort((a, b) => b.spent - a.spent).slice(0, TOP_MERCHANTS);
 }
