@@ -1,0 +1,10 @@
+# Secrets never go into the image.
+.env
+.env*
+
+node_modules
+dist
+dist-test
+*.log
+Dockerfile
+.dockerignore

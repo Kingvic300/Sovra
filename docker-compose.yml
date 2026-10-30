@@ -1,0 +1,44 @@
+# Local development: Postgres + the Sovra API.
+#   docker compose up --build        then  curl localhost:8787/api/health
+#   npm run dev:frontend             the Vite dev server proxies /api to port 8787
+#
+# API keys (Groq, Tatum, Walrus Memory) are read from backend/.env when it exists. The values set under
+# `environment` below win over that file, so the API always uses this Postgres and development settings.
+# Not for production: see DEPLOYMENT.md.
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: sovra
+      POSTGRES_PASSWORD: sovra
+      POSTGRES_DB: sovra
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sovra -d sovra"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://sovra:sovra@db:5432/sovra
+      NODE_ENV: development
+      # Local only. Set SESSION_SECRET in your shell to override it.
+      SESSION_SECRET: ${SESSION_SECRET:-local-development-only-not-a-secret}
+      FRONTEND_ORIGIN: http://localhost:5173
+      # Clients connect straight to the container here, with no proxy in front.
+      TRUST_PROXY: "false"
+    ports:
+      - "8787:8787"
+
+volumes:
+  db-data:

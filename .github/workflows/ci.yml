@@ -32,6 +32,13 @@ jobs:
       # Integration tests use in-process Postgres (PGlite) and fakes for Groq, Walrus and Tatum: no secrets needed.
       - run: npm test
 
+  docker:
+    name: Backend Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t sovra-backend backend
+
   frontend:
     name: Frontend (lint, build)
     runs-on: ubuntu-latest
