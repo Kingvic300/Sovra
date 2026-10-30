@@ -47,7 +47,7 @@ Sovra keeps that context. Every goal, limit, category correction and decision be
 |---|---|
 | **Overview** | Total balance across bank accounts and USDC on Sui, a 30-day trend, what Sovra remembers, live budget status and a goal tracker |
 | **Transactions** | Imported transactions with search and filters. Change a category and Sovra asks "Always file Amazon under business supplies?" and learns the rule |
-| **Budgets** | Monthly limits that count scheduled renewals as hatched segments before they hit, plus suggestions based on your history. Add a budget from a validated form |
+| **Budgets** | Monthly limits that count scheduled renewals as hatched segments before they hit, plus suggestions based on your history. When a budget is heading over, **What should I cut?** has the AI pick which renewals to pause and which habits to skip, with the saving for each, and it leaves alone anything you told Sovra matters to you |
 | **Goals** | Savings goals with progress, weekly amounts and target dates |
 | **Recurring** | Bills and subscriptions found in your transactions, with reminders and Pause/Resume. Pausing really frees the money in your budgets |
 | **Memory** | Every memory Sovra keeps, in plain words with the key phrase highlighted. Filter by type and forget anything, with Undo |

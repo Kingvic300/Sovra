@@ -78,6 +78,52 @@ describe("GroqAiProvider", () => {
     );
   });
 
+  it("retries once after a dropped connection or a server error, then gives up", async () => {
+    let calls = 0;
+    fetchMock.mock.mockImplementation(async () => {
+      if (++calls === 1) throw new TypeError("fetch failed");
+      return completion("Second try.");
+    });
+    assert.equal((await new GroqAiProvider(env("gsk_test")).answer(answerInput)).text, "Second try.");
+    assert.equal(calls, 2);
+
+    calls = 0;
+    fetchMock.mock.mockImplementation(async () => {
+      calls++;
+      return new Response("bad gateway", { status: 502 });
+    });
+    await assert.rejects(
+      new GroqAiProvider(env("gsk_test")).answer(answerInput),
+      (err: unknown) => err instanceof AppError && err.code === "ai_upstream_error",
+    );
+    assert.equal(calls, 2);
+  });
+
+  it("asks for cut plans with only the candidates' ids allowed", async () => {
+    fetchMock.mock.mockImplementation(async () =>
+      completion(JSON.stringify({ summary: "Pause Netflix.", cuts: [{ id: "pause:n", visits: null, why: "Renews soon.", memory: null }], kept: [] })),
+    );
+    const result = await new GroqAiProvider(env("gsk_test")).planCuts({
+      currency: "USD",
+      today: "2026-06-10",
+      targets: [{ category: "entertainment", label: "Entertainment", limit: 80, projected: 90, over: 10 }],
+      candidates: [{ id: "pause:n", kind: "pause", category: "entertainment", merchant: "Netflix", recurringId: "n", saving: 15.99, nextDate: "2026-06-15" }],
+      memories: ["Spotify is how I focus at work."],
+      goals: [],
+    });
+    assert.deepEqual(result.cuts, [{ id: "pause:n", visits: null, why: "Renews soon.", memory: null }]);
+    const body = JSON.parse((fetchMock.mock.calls[0].arguments[1] as RequestInit).body as string);
+    assert.deepEqual(body.response_format.json_schema.schema.properties.cuts.items.properties.id, { type: "string", enum: ["pause:n"] });
+    assert.match(body.messages[0].content, /Cut wants first/);
+    assert.match(body.messages[1].content, /Spotify is how I focus at work/);
+
+    fetchMock.mock.mockImplementation(async () => completion("not json at all"));
+    await assert.rejects(
+      new GroqAiProvider(env("gsk_test")).planCuts({ currency: "USD", today: "2026-06-10", targets: [], candidates: [], memories: [], goals: [] }),
+      (err: unknown) => err instanceof AppError && err.code === "ai_upstream_error",
+    );
+  });
+
   it("reports timeouts with a friendly message", async () => {
     fetchMock.mock.mockImplementation(async () => {
       throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
