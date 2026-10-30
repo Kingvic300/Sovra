@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { Bell, ChevronRight, CircleAlert, CircleCheck, Repeat } from "lucide-react";
+import { Bell, ChevronRight, CircleAlert, CircleCheck, Repeat, X } from "lucide-react";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { budgetViews, useAppData } from "@/lib/app-data";
 import { CATEGORIES } from "@/lib/demo-data";
 import { daysBetween, money, relativeDays } from "@/lib/format";
 import { useMediaQuery } from "@/lib/use-media-query";
 
-type Alert = { id: string; icon: typeof Bell; title: string; body: string; to: string; tone: "over" | "caution" };
+type Alert = {
+  id: string;
+  icon: typeof Bell;
+  title: string;
+  body: string;
+  to: string;
+  tone: "over" | "caution";
+  /** Set for reminders the backend keeps: dismissing one hides it for good. */
+  dismiss?: () => void;
+};
 
 const TONES = {
   over: "bg-over-soft text-over",
@@ -21,8 +30,8 @@ function AlertGroup({ label, alerts, onPick }: { label: string; alerts: Alert[];
       <h3 className="px-3 pt-3 pb-1 text-[13px] font-semibold text-muted">{label}</h3>
       <ul>
         {alerts.map((a) => (
-          <li key={a.id}>
-            <Link to={a.to} onClick={onPick} className="flex items-start gap-3 rounded-2xl px-3 py-3 transition-colors hover:bg-porcelain">
+          <li key={a.id} className="flex items-start">
+            <Link to={a.to} onClick={onPick} className="flex min-w-0 flex-1 items-start gap-3 rounded-2xl px-3 py-3 transition-colors hover:bg-porcelain">
               <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${TONES[a.tone]}`}>
                 <a.icon className="size-5" aria-hidden />
               </span>
@@ -32,6 +41,16 @@ function AlertGroup({ label, alerts, onPick }: { label: string; alerts: Alert[];
               </span>
               <ChevronRight className="mt-2.5 size-4 shrink-0 text-muted" aria-hidden />
             </Link>
+            {a.dismiss && (
+              <button
+                type="button"
+                onClick={a.dismiss}
+                aria-label={`Dismiss: ${a.title}`}
+                className="mt-3 grid size-9 shrink-0 place-items-center rounded-md text-muted hover:bg-porcelain hover:text-ink pointer-coarse:size-11"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -66,9 +85,12 @@ function AlertList({ alerts, onPick }: { alerts: Alert[]; onPick: () => void }) 
   );
 }
 
-/** Bell with alerts built from the user's data: budgets going over and renewals due soon. */
+/**
+ * Bell with budgets going over and renewals due soon: the backend's reminders when live,
+ * otherwise alerts built from the data on screen.
+ */
 export function NotificationsButton() {
-  const { data } = useAppData();
+  const { data, dismissReminder } = useAppData();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   // Phones get a bottom sheet like the rest of the mobile shell; wider screens a popover.
@@ -86,30 +108,40 @@ export function NotificationsButton() {
     };
   }, [open, wide]);
 
-  const alerts: Alert[] = [
-    ...budgetViews(data)
-      .filter((b) => b.over)
-      .map((b) => ({
-        id: `budget-${b.category}`,
-        icon: CircleAlert,
-        title: `${CATEGORIES[b.category]} will go over`,
-        body: b.renewalSentence
-          ? `${b.renewalSentence}, taking it to ${money(b.projected, { whole: true })} of ${money(b.limit, { whole: true })}.`
-          : `Spending is at ${money(b.projected, { whole: true })} of ${money(b.limit, { whole: true })}.`,
-        to: "/app/budgets",
-        tone: "over" as const,
-      })),
-    ...data.recurring
-      .filter((r) => r.status === "active" && r.next >= data.today && daysBetween(data.today, r.next) <= 3)
-      .map((r) => ({
-        id: `renewal-${r.id}`,
-        icon: Repeat,
-        title: `${r.merchant} renews ${relativeDays(daysBetween(data.today, r.next))}`,
-        body: `${money(r.amount)} from your ${CATEGORIES[r.category].toLowerCase()} budget.`,
-        to: "/app/recurring",
-        tone: "caution" as const,
-      })),
-  ];
+  const alerts: Alert[] = data.reminders
+    ? data.reminders.map((r) => ({
+        id: r.id,
+        icon: r.kind === "renewal" ? Repeat : CircleAlert,
+        title: r.title,
+        body: r.body,
+        to: r.to,
+        tone: r.tone,
+        dismiss: () => dismissReminder(r.id),
+      }))
+    : [
+        ...budgetViews(data)
+          .filter((b) => b.over)
+          .map((b) => ({
+            id: `budget-${b.category}`,
+            icon: CircleAlert,
+            title: `${CATEGORIES[b.category]} will go over`,
+            body: b.renewalSentence
+              ? `${b.renewalSentence}, taking it to ${money(b.projected, { whole: true })} of ${money(b.limit, { whole: true })}.`
+              : `Spending is at ${money(b.projected, { whole: true })} of ${money(b.limit, { whole: true })}.`,
+            to: "/app/budgets",
+            tone: "over" as const,
+          })),
+        ...data.recurring
+          .filter((r) => r.status === "active" && r.next >= data.today && daysBetween(data.today, r.next) <= 3)
+          .map((r) => ({
+            id: `renewal-${r.id}`,
+            icon: Repeat,
+            title: `${r.merchant} renews ${relativeDays(daysBetween(data.today, r.next))}`,
+            body: `${money(r.amount)} from your ${CATEGORIES[r.category].toLowerCase()} budget.`,
+            to: "/app/recurring",
+            tone: "caution" as const,
+          })),
+      ];
   const close = () => setOpen(false);
 
   return (

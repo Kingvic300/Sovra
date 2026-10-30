@@ -44,3 +44,10 @@ export function writeEmailSession(session: EmailSession | null) {
   if (session) localStorage.setItem(EMAIL_SESSION, JSON.stringify(session));
   else localStorage.removeItem(EMAIL_SESSION);
 }
+
+/** Forgets what this browser keeps for an address (profile, answered insights), after its account is deleted. */
+export function clearLocalData(address: string) {
+  localStorage.removeItem(profileKey(address));
+  // Kept by AppDataProvider.
+  localStorage.removeItem(`sovra.local.${address}`);
+}

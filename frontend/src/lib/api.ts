@@ -20,6 +20,13 @@ const FALLBACK: Record<number, string> = {
   503: "That service isn't available right now. Try again shortly.",
 };
 
+/**
+ * Fired on window when a data route answers 401: the backend session ended (it expired, or the account was
+ * deleted on another device). AuthProvider signs out, and the route guards return the user to sign-in.
+ * Sign-in routes and GET /me answer 401 as part of checking a session, so they don't fire it.
+ */
+export const UNAUTHORIZED_EVENT = "sovra:unauthorized";
+
 /** JSON fetch against the backend. Throws ApiError with a message that is safe to show to users. */
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, headers, ...rest } = init;
@@ -37,6 +44,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
 
   const body = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401 && path !== "/me" && !path.startsWith("/auth/")) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
     throw new ApiError(
       res.status,

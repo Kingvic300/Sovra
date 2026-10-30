@@ -3,6 +3,7 @@ import {
   ACCOUNTS,
   BALANCE_HISTORY,
   BUDGETS,
+  BUDGET_SUGGESTIONS,
   CHAT,
   GOALS,
   MEMORIES,
@@ -14,6 +15,7 @@ import {
   TRANSACTIONS,
   type Account,
   type Budget,
+  type BudgetSuggestion,
   type CategoryId,
   type ChatMessage,
   type Goal,
@@ -61,7 +63,14 @@ export type AppData = {
   chat: ChatMessage[];
   /** Insights the user already answered, so they aren't asked again. */
   answered: string[];
+  /** Budget limit changes on offer. Written for the demo story in sample data, from the backend when live. */
+  suggestions: BudgetSuggestion[];
+  /** Reminders the backend keeps. Null when not live: the bell builds its alerts from the data instead. */
+  reminders: Reminder[] | null;
 };
+
+/** An open in-app reminder from GET /reminders. */
+export type Reminder = { id: string; kind: string; title: string; body: string; tone: "over" | "caution"; to: string };
 
 /** Last day of the month that `iso` falls in. */
 export function monthEndOf(iso: string) {
@@ -89,6 +98,8 @@ export const SAMPLE_DATA: AppData = {
   monthNet: MONTH_NET,
   chat: CHAT,
   answered: [],
+  suggestions: BUDGET_SUGGESTIONS,
+  reminders: null,
 };
 
 /** Whether a memory the server writes for an action was stored. "skipped" means Walrus Memory isn't set up. */
@@ -116,6 +127,8 @@ export function emptyData(today: string): AppData {
     monthNet: 0,
     chat: [],
     answered: [],
+    suggestions: [],
+    reminders: null,
   };
 }
 
@@ -128,7 +141,16 @@ export type AppDataApi = {
   addMemory: (m: NewMemory) => string;
   removeMemory: (id: string) => void;
   restoreMemory: (m: Memory, index: number) => void;
-  setRecurringStatus: (id: string, status: Recurring["status"]) => void;
+  /**
+   * Pauses or resumes a recurring charge. `memory` is the decision to remember. Returns its id so an undo can
+   * forget it, or null when live: the backend writes the memory itself, and an undo is remembered as the
+   * opposite decision.
+   */
+  setRecurringStatus: (id: string, status: Recurring["status"], memory?: NewMemory) => string | null;
+  /** Accepts (sets the suggested limit) or dismisses a budget suggestion. Returns a memory id like setRecurringStatus. */
+  decideSuggestion: (s: BudgetSuggestion, decision: "accepted" | "dismissed", memory: NewMemory) => string | null;
+  /** Hides a backend reminder for good. */
+  dismissReminder: (id: string) => void;
   upsertBudget: (b: Budget) => void;
   addGoal: (g: Omit<Goal, "id">) => string;
   removeGoal: (id: string) => void;

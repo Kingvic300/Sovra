@@ -5,7 +5,7 @@ import { daysBetween, money, relativeDays, shortDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 export function RecurringRow({ r }: { r: Recurring }) {
-  const { data, setRecurringStatus, addMemory, removeMemory } = useAppData();
+  const { data, setRecurringStatus, removeMemory } = useAppData();
   const today = data.today;
   const toast = useToast();
   const days = daysBetween(today, r.next);
@@ -16,8 +16,9 @@ export function RecurringRow({ r }: { r: Recurring }) {
 
   function toggle() {
     const next = paused ? "active" : "paused";
-    setRecurringStatus(r.id, next);
-    const memoryId = addMemory(
+    const memoryId = setRecurringStatus(
+      r.id,
+      next,
       next === "paused"
         ? {
             kind: "decision",
@@ -42,7 +43,7 @@ export function RecurringRow({ r }: { r: Recurring }) {
         label: "Undo",
         onClick: () => {
           setRecurringStatus(r.id, r.status);
-          removeMemory(memoryId);
+          if (memoryId) removeMemory(memoryId);
         },
       },
     });
