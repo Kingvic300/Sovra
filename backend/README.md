@@ -26,7 +26,12 @@ Only `SESSION_SECRET` is required. Any integration without keys answers `503 {"e
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Unit and integration tests (see below) |
 | `npm run db:generate` | Create a migration from `src/database/schema.ts` |
-| `npm run db:migrate` | Apply migrations in `drizzle/` to `DATABASE_URL` |
+| `npm run db:migrate` | Apply migrations in `drizzle/` to `DATABASE_URL` (drizzle-kit, development) |
+| `npm run migrate` | Apply the same migrations with drizzle-orm's migrator (after `build`, no dev dependencies). The Docker image runs this on start |
+
+## Docker
+
+`docker compose up --build` at the repository root starts Postgres and this API, with migrations applied. The image (`Dockerfile`) and the deployment setup are described in [DEPLOYMENT.md](../DEPLOYMENT.md).
 
 ## Tests
 
@@ -169,7 +174,7 @@ Reminders (`src/reminders/reminders.module.ts`) come from the database only (rec
 
 A unique key `(user, kind, ref, due_date)` makes generation idempotent: running it twice, or twice at once, creates nothing new. When the reason goes away (a charge is paused, a budget is back under its limit) the reminder is marked resolved, and it reopens if the reason comes back. Dismissed reminders stay dismissed. Reminders are deleted with their account.
 
-**Running the jobs.** The backend has no deployment target yet (see #12), and nothing here assumes an always-on process. The job (delete expired demos, then refresh every live user's reminders) is idempotent and can be triggered three ways:
+**Running the jobs.** Nothing here assumes an always-on process ([DEPLOYMENT.md](../DEPLOYMENT.md#scheduled-jobs) has the deployed setup). The job (delete expired demos, then refresh every live user's reminders) is idempotent and can be triggered three ways:
 
 1. `GET /reminders` refreshes the signed-in user's reminders before answering, so in-app reminders are current even if no scheduler runs at all.
 2. A cron calls `POST /api/internal/jobs/run` with `Authorization: Bearer $CRON_SECRET` (Render or Railway cron jobs, Vercel Cron, GitHub Actions `schedule`, cron-job.org), or runs `npm run jobs:run` on a machine with the database URL. Hourly is plenty.

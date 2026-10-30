@@ -1,0 +1,29 @@
+name: Scheduled jobs
+
+# Deletes expired demo accounts and refreshes reminders on the deployed backend (see DEPLOYMENT.md).
+# Needs the repository secrets SOVRA_API_URL and CRON_SECRET; without them every run is skipped.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SOVRA_API_URL: ${{ secrets.SOVRA_API_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Run jobs
+        run: |
+          if [ -z "$SOVRA_API_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "SOVRA_API_URL or CRON_SECRET is not set. Skipping."
+            exit 0
+          fi
+          # Free hosts may be asleep: allow time for a cold start.
+          curl --fail-with-body --silent --show-error --max-time 120 --retry 2 --retry-delay 20 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" "$SOVRA_API_URL/api/internal/jobs/run"

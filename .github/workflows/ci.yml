@@ -8,9 +8,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request replaces its older run. Pushes to main all run to the end, so merging
+# several pull requests in a row never leaves main with cancelled runs.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -31,6 +33,13 @@ jobs:
       - run: npm run build
       # Integration tests use in-process Postgres (PGlite) and fakes for Groq, Walrus and Tatum: no secrets needed.
       - run: npm test
+
+  docker:
+    name: Backend Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t sovra-backend backend
 
   frontend:
     name: Frontend (lint, build)
