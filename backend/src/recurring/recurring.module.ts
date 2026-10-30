@@ -121,11 +121,11 @@ export class RecurringService {
   ) {}
 
   /** Detected recurring charges with the user's pause state. Paused ones stay listed so they can be resumed. */
-  async list(address: string): Promise<RecurringItem[]> {
+  async list(address: string, now = new Date()): Promise<RecurringItem[]> {
     // Resolve the database first: without one it throws 503 here, before any query has started.
     const db = this.database.db;
     const [detected, states] = await Promise.all([
-      this.detect(address),
+      this.detect(address, now),
       db.select().from(recurringStates).where(eq(recurringStates.userAddress, address)),
     ]);
     const byKey = new Map(states.map((s) => [s.merchantKey, s]));
@@ -141,8 +141,8 @@ export class RecurringService {
   }
 
   /** Charges Sovra counts in projections, upcoming bills and reminders. */
-  async active(address: string) {
-    return (await this.list(address)).filter((r) => r.status === "active");
+  async active(address: string, now = new Date()) {
+    return (await this.list(address, now)).filter((r) => r.status === "active");
   }
 
   /**
@@ -150,7 +150,7 @@ export class RecurringService {
    * remembered best-effort: a Walrus failure never fails the change.
    */
   async setStatus(session: Session, id: string, status: RecurringStatus, now = new Date()) {
-    const item = (await this.list(session.address)).find((r) => r.merchantKey === merchantKeyOf(id));
+    const item = (await this.list(session.address, now)).find((r) => r.merchantKey === merchantKeyOf(id));
     if (!item) throw notFound("Recurring charge");
     const note = pauseNote(item.merchant);
     if (item.status === status) return { recurring: item, changed: false, memory: null, note };
@@ -185,8 +185,8 @@ export class RecurringService {
   }
 
   /** Repeating charges with amounts in the user's currency, so they line up with budgets. */
-  private async detect(address: string) {
-    const today = Date.now();
+  private async detect(address: string, now: Date) {
+    const today = now.getTime();
     const currency = await this.currencies.forUser(address);
     const { convert } = await this.fx.converterTo(currency);
     const rows = await this.database.db
