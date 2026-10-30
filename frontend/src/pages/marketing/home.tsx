@@ -127,11 +127,11 @@ export default function HomePage() {
         <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_1fr]">
           <div>
             <h1 className="max-w-[14ch] text-[48px] leading-[0.98] font-extrabold tracking-[-0.04em] sm:text-[68px] xl:text-[80px]">
-              Money help that remembers you.
+              Know what you can afford before you spend.
             </h1>
             <p className="mt-6 max-w-[48ch] text-[19px] leading-relaxed text-muted">
-              Sovra reads your accounts, learns your goals, limits and habits, and keeps them in a vault you own. Ask
-              anything and get an answer that fits your life, not an average.
+              Sovra tracks your spending, bills and savings goals. Ask a money question in plain words and get an
+              answer from your real numbers. Tell it something once and it remembers.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               {status === "signed-in" ? (

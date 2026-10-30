@@ -4,7 +4,7 @@
 
 <h1 align="center">Sovra</h1>
 
-<p align="center"><strong>Money help that remembers you.</strong></p>
+<p align="center"><strong>The money app that remembers your goals.</strong></p>
 
 <p align="center">
   A personal finance app that learns your goals, limits and decisions, keeps them in a memory vault on Walrus, and uses them every time you check a budget or ask a question.

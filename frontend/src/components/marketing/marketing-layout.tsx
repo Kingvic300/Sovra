@@ -159,7 +159,7 @@ export function MarketingFooter() {
         <div>
           <Wordmark tone="white" className="text-[24px]" />
           <p className="mt-3 max-w-[36ch] text-white/65">
-            A personal finance app that remembers your goals, limits and decisions, so every answer fits your life.
+            Know what you can afford before you spend. Sovra tracks your spending and goals, and remembers what you tell it.
           </p>
         </div>
         <div>

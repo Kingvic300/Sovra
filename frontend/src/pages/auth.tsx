@@ -163,10 +163,10 @@ export default function AuthPage({ mode }: { mode: "signin" | "signup" }) {
         />
 
         <h2 className="relative max-w-[16ch] text-[34px] leading-[1.05] font-extrabold tracking-[-0.03em] lg:text-[44px]">
-          Money help that remembers you.
+          Know what you can afford before you spend.
         </h2>
         <p className="relative mt-3 max-w-[42ch] text-white/70">
-          Tell Sovra once. It keeps your goals, limits and decisions in a vault you own, and uses them every time you ask.
+          Ask a money question and get an answer from your real numbers. Tell Sovra something once and it remembers.
         </p>
 
         <div className="relative mt-10 max-w-[480px]">
