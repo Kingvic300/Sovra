@@ -57,6 +57,13 @@
       "when": 1793366857027,
       "tag": "0007_recurring_pause_state",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793367345768,
+      "tag": "0008_budget_suggestion_decisions",
+      "breakpoints": true
     }
   ]
 }
