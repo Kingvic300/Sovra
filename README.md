@@ -269,9 +269,9 @@ Type is Hanken Grotesk throughout, with tabular figures for amounts. The logo is
 This is a hackathon build. What works today, and what is still being connected:
 
 - **Done:** every screen and flow in the frontend; the backend API with Tatum, Walrus Memory, Groq, CSV import, learned category rules, recurring detection and wallet signature checks; toasts, validation and error handling throughout.
-- **Connected:** once the backend verifies the session, the app reads and saves accounts, transactions, budgets, goals, memories, recurring charges and Ask history through it. Without a reachable backend it falls back to the sample story stored in the browser.
-- **Browser only:** pausing a recurring charge and answered insights are kept per address in the browser; the backend has no routes for them yet.
-- **Not yet tested against live services:** Tatum, Walrus Memory and Groq calls with real keys, and the database routes against a real Postgres.
+- **Connected:** once the backend verifies the session, the app reads and saves accounts, transactions, budgets and budget suggestions, goals, memories, recurring charges (including pause and resume), reminders, Ask history, and data export and account deletion through it. The demo account gets the sample story without a reachable backend; a real account shows empty screens instead of sample data.
+- **Browser only:** which overview insights you've answered is kept per address in the browser.
+- **End-to-end checks:** see [docs/e2e.md](docs/e2e.md) for the last recorded run and the manual checklist.
 
 ## Hackathon checklist
 

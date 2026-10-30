@@ -1,8 +1,9 @@
 import { api, ApiError } from "@/lib/api";
-import type { AppData } from "@/lib/app-data";
+import type { AppData, Reminder } from "@/lib/app-data";
 import type {
   Account,
   Budget,
+  BudgetSuggestion,
   CategoryId,
   ChatMessage,
   Goal,
@@ -19,7 +20,15 @@ import { highlightFor } from "@/lib/highlight";
 export type ApiMemory = { id: string; kind: MemoryKind; text: string; source: string; uses: number; createdAt: string };
 type ApiBudget = { category: CategoryId; limit: number; spent: number };
 type ApiGoal = { id: string; name: string; target: number; saved: number; due: string; weekly: number | null };
-type ApiRecurring = { merchant: string; merchantKey: string; category: CategoryId; amount: number; nextDate: string };
+type ApiRecurring = {
+  id: string;
+  merchant: string;
+  category: CategoryId;
+  amount: number;
+  nextDate: string;
+  status: Recurring["status"];
+};
+type ApiSuggestion = { id: string; category: CategoryId; from: number; to: number; text: string };
 type ApiTransaction = Omit<Transaction, "accountId"> & { accountId: string | null };
 type ApiAccount = {
   id: string;
@@ -58,11 +67,15 @@ function toGoal(g: ApiGoal, today: string): Goal {
   };
 }
 
-/** Recurring charges have no id on the backend; the merchant key is stable across imports. */
-const toRecurring = (r: ApiRecurring, paused: Set<string>): Recurring => {
-  const status = paused.has(r.merchantKey) ? "paused" : "active";
-  return { id: r.merchantKey, merchant: r.merchant, amount: r.amount, next: r.nextDate, category: r.category, status, baseStatus: status };
-};
+const toRecurring = (r: ApiRecurring): Recurring => ({
+  id: r.id,
+  merchant: r.merchant,
+  amount: r.amount,
+  next: r.nextDate,
+  category: r.category,
+  status: r.status,
+  baseStatus: r.status,
+});
 
 export const toChat = (m: ApiAskMessage, i: number): ChatMessage[] => {
   const id = m.id ?? `a${i}`;
@@ -93,6 +106,8 @@ export type LiveData = {
   total: number | null;
   balanceHistory: number[];
   chat: ChatMessage[];
+  suggestions: BudgetSuggestion[];
+  reminders: Reminder[] | null;
 };
 
 /** Thrown when the backend runs without a database, so there is no account data to show. */
@@ -100,9 +115,9 @@ export class NoDatabaseError extends Error {}
 
 const optional = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
 
-/** Loads everything the app screens show. `paused` holds merchant keys the user paused in Sovra. */
-export async function loadLiveData(today: string, paused: Set<string>): Promise<LiveData> {
-  const [budgets, goals, transactions, recurring, accounts, memories, summary, history] = await Promise.all([
+/** Loads everything the app screens show. */
+export async function loadLiveData(today: string): Promise<LiveData> {
+  const [budgets, goals, transactions, recurring, accounts, memories, summary, history, suggestions, reminders] = await Promise.all([
     api<{ budgets: ApiBudget[] }>(`/budgets?month=${today.slice(0, 7)}`).catch((err: unknown) => {
       if (err instanceof ApiError && err.code === "not_configured") throw new NoDatabaseError();
       throw err;
@@ -115,6 +130,9 @@ export async function loadLiveData(today: string, paused: Set<string>): Promise<
     optional(api<{ memories: ApiMemory[] }>("/memories"), { memories: [] }),
     optional(api<ApiSummary>("/accounts/summary"), { currency: "", total: null, trend: [], fx: null }),
     optional(api<{ messages: ApiAskMessage[] }>("/ask/history?limit=20"), { messages: [] }),
+    optional(api<{ suggestions: ApiSuggestion[] }>("/budgets/suggestions"), { suggestions: [] }),
+    // Null lets the bell fall back to alerts built from the data.
+    optional(api<{ reminders: Reminder[] }>("/reminders"), null),
   ]);
 
   const wallet = accounts.wallet;
@@ -141,7 +159,7 @@ export async function loadLiveData(today: string, paused: Set<string>): Promise<
     budgets: budgets.budgets.map(({ category, limit, spent }) => ({ category, limit, spent })),
     goals: goals.goals.map((g) => toGoal(g, today)),
     transactions: transactions.transactions.map((t) => ({ ...t, accountId: t.accountId ?? "" })),
-    recurring: recurring.recurring.map((r) => toRecurring(r, paused)),
+    recurring: recurring.recurring.map(toRecurring),
     accounts: [
       ...accounts.accounts.map((a) => ({
         id: a.id,
@@ -160,5 +178,7 @@ export async function loadLiveData(today: string, paused: Set<string>): Promise<
     // The trend covers bank accounts in the user's currency; the live wallet (USD) is added flat at today's rate.
     balanceHistory: summary.trend.map((d) => d.balance + (wallet.usdc ?? 0) * (summary.fx?.perUsd ?? 1)),
     chat: [...history.messages].reverse().flatMap(toChat),
+    suggestions: suggestions.suggestions.map(({ id, category, from, to, text }) => ({ id, category, from, to, text })),
+    reminders: reminders?.reminders ?? null,
   };
 }

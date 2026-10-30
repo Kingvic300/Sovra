@@ -6,20 +6,20 @@ import { money } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 export function BudgetSuggestionCard({ suggestion: s }: { suggestion: BudgetSuggestion }) {
-  const { data, upsertBudget, addMemory, removeMemory, markAnswered } = useAppData();
+  const { data, upsertBudget, decideSuggestion, removeMemory, markAnswered } = useAppData();
   const toast = useToast();
   const label = CATEGORIES[s.category];
   const answerId = `suggestion-${s.id}`;
   const budget = data.budgets.find((b) => b.category === s.category);
   const applied = budget?.limit === s.to;
   const kept = data.answered.includes(answerId) && !applied;
+  // The backend records the answer for good, so live answers have no undo.
+  const live = data.source === "live";
 
   function apply() {
     if (!budget) return;
     const before = budget;
-    upsertBudget({ ...budget, limit: s.to });
-    markAnswered(answerId, true);
-    const memoryId = addMemory({
+    const memoryId = decideSuggestion(s, "accepted", {
       kind: "limit",
       text: `Keep ${label.toLowerCase()} under ${money(s.to, { whole: true })} a month.`,
       highlight: `under ${money(s.to, { whole: true })} a month`,
@@ -28,20 +28,21 @@ export function BudgetSuggestionCard({ suggestion: s }: { suggestion: BudgetSugg
     toast.success({
       title: `${label} limit is now ${money(s.to, { whole: true })}`,
       description: "Your budget and memory are updated.",
-      action: {
-        label: "Undo",
-        onClick: () => {
-          upsertBudget(before);
-          markAnswered(answerId, false);
-          removeMemory(memoryId);
-        },
-      },
+      action: live
+        ? undefined
+        : {
+            label: "Undo",
+            onClick: () => {
+              upsertBudget(before);
+              markAnswered(answerId, false);
+              if (memoryId) removeMemory(memoryId);
+            },
+          },
     });
   }
 
   function keep() {
-    markAnswered(answerId, true);
-    const memoryId = addMemory({
+    const memoryId = decideSuggestion(s, "dismissed", {
       kind: "decision",
       text: `You kept ${label.toLowerCase()} at ${money(s.from, { whole: true })} a month.`,
       highlight: `kept ${label.toLowerCase()} at ${money(s.from, { whole: true })}`,
@@ -50,13 +51,15 @@ export function BudgetSuggestionCard({ suggestion: s }: { suggestion: BudgetSugg
     toast.info({
       title: `${label} stays at ${money(s.from, { whole: true })}`,
       description: "Sovra won't suggest this again for 3 months.",
-      action: {
-        label: "Undo",
-        onClick: () => {
-          markAnswered(answerId, false);
-          removeMemory(memoryId);
-        },
-      },
+      action: live
+        ? undefined
+        : {
+            label: "Undo",
+            onClick: () => {
+              markAnswered(answerId, false);
+              if (memoryId) removeMemory(memoryId);
+            },
+          },
     });
   }
 
