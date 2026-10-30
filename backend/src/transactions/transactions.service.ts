@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, desc, eq, gte, lt } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte } from "drizzle-orm";
 import { AI_PROVIDER, type AiProvider } from "../ai/ai.provider.js";
 import { badRequest, notFound } from "../common/errors.js";
 import { DatabaseService } from "../database/database.service.js";
@@ -132,24 +132,55 @@ export class TransactionsService {
     const categorizedBy = await this.refineCategories(allRows, session.method !== "demo");
     await db.insert(users).values({ address: session.address, method: session.method, name: session.name }).onConflictDoNothing();
 
-    const saved: { id: string; name: string; kind: string; balance: number | null; currency: string; imported: number }[] = [];
+    const existingAccounts = await db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.userAddress, session.address), eq(accounts.kind, "csv")));
+
+    const saved: {
+      id: string;
+      name: string;
+      kind: string;
+      balance: number | null;
+      currency: string;
+      imported: number;
+      alreadyImported: number;
+    }[] = [];
     for (const sheet of parsedSheets) {
-      const [account] = await db
-        .insert(accounts)
-        .values({
-          userAddress: session.address,
-          kind: "csv",
-          name: sheet.name,
-          currency: sheet.currency,
-          balance: sheet.parsed.closingBalance == null ? null : sheet.parsed.closingBalance.toFixed(2),
-          syncedAt: new Date(),
-        })
-        .returning();
+      // Importing a statement into an account with the same name adds to that account instead of
+      // creating a second one, and rows that are already there are skipped, so an overlapping or
+      // repeated export never counts money twice.
+      const match = existingAccounts.find((a) => a.name.trim().toLowerCase() === sheet.name.trim().toLowerCase());
+      const rows = match ? await this.withoutAlreadyImported(match.id, sheet.parsed.rows) : sheet.parsed.rows;
+      const latest = sheet.parsed.rows.reduce((max, r) => (r.date > max ? r.date : max), "");
+      const lastKnown = match ? await this.lastTransactionDate(match.id) : null;
+      // An older statement imported later must not overwrite a newer balance.
+      const balanceIsCurrent = sheet.parsed.closingBalance != null && (!lastKnown || latest >= lastKnown);
+      const [account] = match
+        ? await db
+            .update(accounts)
+            .set({
+              syncedAt: new Date(),
+              ...(balanceIsCurrent ? { balance: sheet.parsed.closingBalance!.toFixed(2) } : {}),
+            })
+            .where(eq(accounts.id, match.id))
+            .returning()
+        : await db
+            .insert(accounts)
+            .values({
+              userAddress: session.address,
+              kind: "csv",
+              name: sheet.name,
+              currency: sheet.currency,
+              balance: sheet.parsed.closingBalance == null ? null : sheet.parsed.closingBalance.toFixed(2),
+              syncedAt: new Date(),
+            })
+            .returning();
 
       const BATCH = 500;
-      for (let i = 0; i < sheet.parsed.rows.length; i += BATCH) {
+      for (let i = 0; i < rows.length; i += BATCH) {
         await db.insert(transactions).values(
-          sheet.parsed.rows.slice(i, i + BATCH).map((r) => ({
+          rows.slice(i, i + BATCH).map((r) => ({
             userAddress: session.address,
             accountId: account.id,
             date: r.date,
@@ -166,21 +197,65 @@ export class TransactionsService {
         name: account.name,
         kind: account.kind,
         balance: account.balance == null ? null : Number(account.balance),
-        currency: sheet.currency,
-        imported: sheet.parsed.rows.length,
+        currency: account.currency ?? sheet.currency,
+        imported: rows.length,
+        alreadyImported: sheet.parsed.rows.length - rows.length,
       });
     }
 
-    const { imported: _imported, ...firstAccount } = saved[0];
+    const { imported: _imported, alreadyImported: _already, ...firstAccount } = saved[0];
     return {
       preview: false,
       account: firstAccount,
       accounts: saved,
-      imported: allRows.length,
+      imported: saved.reduce((n, a) => n + a.imported, 0),
+      alreadyImported: saved.reduce((n, a) => n + a.alreadyImported, 0),
       learnedApplied: categorizedBy.rules,
       categorizedBy,
       skipped,
     };
+  }
+
+  /**
+   * Drops rows the account already holds (same date, amount and description). Counts are kept per
+   * key, so two identical coffees on one day still import when only one of them is already saved.
+   */
+  private async withoutAlreadyImported(accountId: string, rows: ParsedRow[]) {
+    if (rows.length === 0) return rows;
+    const dates = rows.map((r) => r.date).sort();
+    const existing = await this.database.db
+      .select({ date: transactions.date, amount: transactions.amount, merchant: transactions.merchant })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.accountId, accountId),
+          gte(transactions.date, dates[0]),
+          lte(transactions.date, dates[dates.length - 1]),
+        ),
+      );
+    const key = (date: string, amount: number, merchant: string) => `${date}|${amount.toFixed(2)}|${merchant.trim().toLowerCase()}`;
+    const left = new Map<string, number>();
+    for (const t of existing) {
+      const k = key(t.date, Number(t.amount), t.merchant);
+      left.set(k, (left.get(k) ?? 0) + 1);
+    }
+    return rows.filter((r) => {
+      const k = key(r.date, r.amount, r.merchant);
+      const n = left.get(k) ?? 0;
+      if (n === 0) return true;
+      left.set(k, n - 1);
+      return false;
+    });
+  }
+
+  private async lastTransactionDate(accountId: string) {
+    const [row] = await this.database.db
+      .select({ date: transactions.date })
+      .from(transactions)
+      .where(eq(transactions.accountId, accountId))
+      .orderBy(desc(transactions.date))
+      .limit(1);
+    return row?.date ?? null;
   }
 
   /**

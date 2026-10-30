@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { AccountsService } from "../accounts/accounts.module.js";
 import { AI_PROVIDER, type AiProvider } from "../ai/ai.provider.js";
 import type { Session } from "../auth/session.js";
 import { badRequest, notConfigured } from "../common/errors.js";
@@ -31,6 +32,7 @@ export class AskService {
     private readonly transactions: TransactionsService,
     private readonly tatum: TatumService,
     private readonly currencies: CurrencyService,
+    private readonly accounts: AccountsService,
   ) {}
 
   /**
@@ -59,7 +61,8 @@ export class AskService {
     };
 
     const db = this.database.available;
-    const [memories, profile, budgets, goals, recent, upcoming, wallet] = await Promise.all([
+    const hasWallet = this.tatum.configured && session.method !== "email";
+    const [memories, profile, budgets, goals, recent, upcoming, balances, walletOnly] = await Promise.all([
       attempt("memories", await this.memory.availableFor(session.address), () =>
         this.memory.recall(session.address, question, MEMORY_LIMIT),
       ),
@@ -76,11 +79,14 @@ export class AskService {
         const horizon = new Date(Date.now() + UPCOMING_DAYS * 86_400_000).toISOString().slice(0, 10);
         return (await this.recurring.list(session.address)).filter((r) => r.nextDate <= horizon);
       }),
+      // "Can I afford it?" needs what's in the accounts. The summary also reads the live wallet.
+      db ? attempt("account balances", true, () => this.accountBalances(session)) : undefined,
+      // Without a database there is no summary, so the wallet is read on its own.
       // Email accounts have no wallet; their address is only an id.
-      attempt("Sui wallet balance", this.tatum.configured && session.method !== "email", () =>
-        this.tatum.getUsdcBalance(session.address),
-      ),
+      db ? undefined : attempt("Sui wallet balance", hasWallet, () => this.tatum.getUsdcBalance(session.address)),
     ]);
+    const wallet = balances ? balances.wallet : walletOnly ? { usdc: walletOnly.usdc } : undefined;
+    if (db && session.method !== "email" && !wallet) missing.push("Sui wallet balance");
 
     // Budgets, goals and bills are in the user's currency; transactions keep their account's.
     const currency = await this.currencies.forUser(session.address);
@@ -95,6 +101,11 @@ export class AskService {
     }
     if (profile) context.profile = profile;
     if (wallet) context.suiWalletUsdc = wallet.usdc;
+    if (balances) {
+      context.accounts = balances.accounts;
+      context.totalBalance = balances.total;
+      if (balances.notCounted.length) context.balancesNotCounted = balances.notCounted;
+    }
     if (budgets) context.budgetsThisMonth = budgets.budgets.map(({ label, limit, spent }) => ({ label, limit, spent }));
     if (goals) context.goals = goals.map(({ name, target, saved, due, weekly }) => ({ name, target, saved, due, weekly }));
     if (recent) {
@@ -126,6 +137,17 @@ export class AskService {
       model,
       id: saved?.id ?? null,
       createdAt: saved?.createdAt.toISOString() ?? null,
+    };
+  }
+
+  /** Each account's balance in its own currency, and the total in the user's (null when none is known). */
+  private async accountBalances(session: Session) {
+    const [summary, list] = await Promise.all([this.accounts.summary(session), this.accounts.list(session.address)]);
+    return {
+      accounts: list.filter((a) => a.kind !== "sui").map(({ name, balance, currency }) => ({ name, balance, currency })),
+      total: summary.total,
+      notCounted: summary.missing.map((m) => m.name),
+      wallet: summary.wallet.status === "live" && summary.wallet.usdc !== null ? { usdc: summary.wallet.usdc } : undefined,
     };
   }
 

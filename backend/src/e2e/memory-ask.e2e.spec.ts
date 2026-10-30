@@ -140,6 +140,9 @@ describe("memories and Ask Sovra", () => {
     await flushBackgroundWork();
     await client.put("/budgets/entertainment", { limit: 100 });
     await client.post("/goals", { name: "Laptop", target: 1200, due: "2027-01-31" });
+    await client.request("POST", "/transactions/import", {
+      form: csvForm("Date,Description,Amount,Balance\n2026-10-01,Amazon,-30,870"),
+    });
 
     const res = await client.post("/ask", { question: "Can I afford a laptop?" });
     assert.equal(res.status, 200);
@@ -155,6 +158,8 @@ describe("memories and Ask Sovra", () => {
     assert.deepEqual((seen.context.goals as { name: string }[]).map((g) => g.name), ["Laptop"]);
     assert.equal((seen.context.budgetsThisMonth as unknown[]).length, 1);
     assert.equal(seen.context.suiWalletUsdc, undefined);
+    assert.equal(seen.context.totalBalance, 870, "the model knows what the user has");
+    assert.deepEqual(seen.context.accounts, [{ name: "statement", balance: 870, currency: "USD" }]);
   });
 
   it("validates the question", async () => {

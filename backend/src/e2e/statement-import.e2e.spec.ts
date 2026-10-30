@@ -79,6 +79,40 @@ describe("statement import from Excel and PDF", () => {
     assert.equal(saved.body.account.name, "oct");
   });
 
+  it("adds a repeated or overlapping statement to the same account without counting rows twice", async () => {
+    const client = api.client();
+    await signIn(client);
+    const csv = (rows: string[]) =>
+      form(Buffer.from(["Date,Description,Amount,Balance", ...rows].join("\n")), "bank.csv", "text/csv");
+    const september = ["2026-09-30,Coffee,-4.50,995.50", "2026-09-30,Coffee,-4.50,991.00"];
+
+    const first = await client.request("POST", "/transactions/import", { form: csv(september) });
+    assert.equal(first.body.imported, 2);
+
+    const again = await client.request("POST", "/transactions/import", { form: csv(september) });
+    assert.equal(again.status, 201);
+    assert.equal(again.body.imported, 0);
+    assert.equal(again.body.alreadyImported, 2);
+    assert.equal(again.body.account.id, first.body.account.id);
+
+    const overlap = await client.request("POST", "/transactions/import", {
+      form: csv([...september, "2026-10-01,Netflix,-17.99,973.01"]),
+    });
+    assert.equal(overlap.body.imported, 1);
+    assert.equal(overlap.body.account.balance, 973.01);
+
+    // An older export imported last keeps the newer balance.
+    const older = await client.request("POST", "/transactions/import", { form: csv(["2026-09-01,Rent,-500,1000"]) });
+    assert.equal(older.body.imported, 1);
+    assert.equal(older.body.account.balance, 973.01);
+
+    const listed = await client.get("/accounts");
+    assert.deepEqual(
+      listed.body.accounts.map((a: { name: string; transactionCount: number; balance: number }) => [a.name, a.transactionCount, a.balance]),
+      [["bank", 4, 973.01]],
+    );
+  });
+
   it("imports each sheet of a workbook as its own account", async () => {
     const book = new ExcelJS.Workbook();
     for (const [title, rows] of [
