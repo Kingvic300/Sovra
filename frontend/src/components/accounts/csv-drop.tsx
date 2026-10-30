@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
@@ -22,6 +22,8 @@ type Preview = {
 };
 type Imported = {
   imported: number;
+  /** Rows the account already held, from an earlier import of the same statement. */
+  alreadyImported?: number;
   account: { name: string };
   accounts?: { name: string; imported: number }[];
   categorizedBy: { rules: number; ai: number; keywords: number };
@@ -48,6 +50,9 @@ export function CsvDrop() {
   const toast = useToast();
   const { data, reload } = useAppData();
   const live = data.source === "live";
+  const loading = data.source === "loading";
+  /** A file picked while the user's data was still loading, read once it settles. */
+  const [queued, setQueued] = useState<File | null>(null);
 
   function fail(title: string, e: unknown) {
     toast.error({ title, description: e instanceof ApiError ? e.message : "Try again in a moment." });
@@ -63,12 +68,24 @@ export function CsvDrop() {
       });
       return;
     }
-    if (/\.pdf$/i.test(f.name) && !live) {
-      toast.error({ title: "PDFs need a signed-in account", description: "The demo reads CSV and Excel files. Sign in to import a PDF." });
-      return;
-    }
     if (f.size > 5 * 1024 * 1024) {
       toast.error({ title: "That file is over 5 MB", description: "Export a shorter date range and try again." });
+      return;
+    }
+    if (loading) {
+      setFile(f);
+      setPreview(null);
+      setQueued(f);
+      return;
+    }
+    await read(f);
+  }
+
+  async function read(f: File) {
+    setQueued(null);
+    if (/\.pdf$/i.test(f.name) && !live) {
+      cancel();
+      toast.error({ title: "PDFs need a signed-in account", description: "The demo reads CSV and Excel files. Sign in to import a PDF." });
       return;
     }
     setFile(f);
@@ -81,12 +98,21 @@ export function CsvDrop() {
     try {
       setPreview(await upload<Preview>(f, true));
     } catch (e) {
-      setFile(null);
+      cancel();
       fail(`Couldn't read ${f.name}`, e);
     } finally {
       setBusy(false);
     }
   }
+
+  // The preview needs the backend, so wait until it is known whether the user's data is live.
+  const readRef = useRef(read);
+  useLayoutEffect(() => {
+    readRef.current = read;
+  });
+  useEffect(() => {
+    if (queued && !loading) void readRef.current(queued);
+  }, [queued, loading]);
 
   async function confirm() {
     if (!file) return;
@@ -95,16 +121,20 @@ export function CsvDrop() {
       const res = await upload<Imported>(file, false);
       await reload();
       const learned = res.categorizedBy.rules;
+      const already = res.alreadyImported ?? 0;
       toast.success({
-        title: `${res.imported} transactions imported`,
+        title: res.imported === 0 ? "Nothing new to import" : `${res.imported} transactions imported`,
         description: `${
-          res.accounts && res.accounts.length > 1
-            ? `Added ${res.accounts.map((a) => `${a.imported} to ${a.name}`).join(" and ")}.`
-            : `Added to ${res.account.name}.`
-        }${learned ? ` ${learned} filed by rules Sovra learned from you.` : ""}`,
+          res.imported === 0
+            ? `${res.account.name} already has every transaction in this statement.`
+            : res.accounts && res.accounts.length > 1
+              ? `Added ${res.accounts.map((a) => `${a.imported} to ${a.name}`).join(" and ")}.`
+              : `Added to ${res.account.name}.`
+        }${already && res.imported > 0 ? ` ${already} were already there and were skipped.` : ""}${
+          learned ? ` ${learned} filed by rules Sovra learned from you.` : ""
+        }`,
       });
-      setFile(null);
-      setPreview(null);
+      cancel();
     } catch (e) {
       fail("Couldn't import the statement", e);
     } finally {
@@ -183,7 +213,7 @@ export function CsvDrop() {
       }`}
     >
       <Upload className="size-5 text-cobalt" aria-hidden />
-      {busy ? (
+      {busy || queued ? (
         <p className="mt-2">
           Reading {file?.name}…
           {file && /\.pdf$/i.test(file.name) && <span className="block text-[13px] text-muted">PDFs can take up to a minute.</span>}
@@ -201,7 +231,7 @@ export function CsvDrop() {
       <button
         type="button"
         onClick={() => input.current?.click()}
-        disabled={busy}
+        disabled={busy || queued !== null}
         className="mt-3 text-sm font-semibold text-cobalt hover:underline disabled:opacity-50"
       >
         {file ? "Choose a different file" : "Choose file"}
