@@ -1,11 +1,13 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { Session } from "../auth/session.js";
+import { badRequest, notFound } from "../common/errors.js";
 import { DatabaseService } from "../database/database.service.js";
-import { budgets, goals, profiles, users } from "../database/schema.js";
+import { authNonces, budgets, goals, memories, profiles, users } from "../database/schema.js";
 import { MemwalService } from "../memory/memwal.service.js";
 import type { CategoryId } from "../shared/categories.js";
 import { goalSentence, limitSentence, paydaySentence } from "../shared/memory-text.js";
+import { USER_DATA_TABLES } from "./user-data.js";
 
 export type ProfileInput = {
   name: string;
@@ -103,6 +105,74 @@ export class MeService {
     }
 
     return { profile: this.toApi(saved), memories };
+  }
+
+  /**
+   * Everything Sovra stores about the user, as JSON: the account (without the password hash) and
+   * every row of every user-data table, forgotten memories included.
+   */
+  async exportData(session: Session, now = new Date()) {
+    const db = this.database.db;
+    const [user] = await db.select().from(users).where(eq(users.address, session.address));
+    if (!user) throw notFound("Account");
+    const { passwordHash: _passwordHash, ...account } = user;
+    const data: Record<string, unknown[]> = {};
+    for (const [name, { table, owner }] of Object.entries(USER_DATA_TABLES)) {
+      data[name] = await db.select().from(table).where(eq(owner, session.address));
+    }
+    return {
+      format: "sovra-export",
+      version: 1,
+      exportedAt: now.toISOString(),
+      account,
+      data,
+      notes: [
+        "Amounts are exact decimal strings in US dollars; USDC on Sui counts as dollars.",
+        "memories includes ones you forgot (forgottenAt is set). Sovra no longer shows or uses those.",
+        "Memories written to Walrus are stored there encrypted; their text is here, the encrypted copies are not.",
+      ],
+    };
+  }
+
+  /**
+   * Deletes the account and everything Sovra holds about it, in one transaction: every user-data
+   * table (by cascade from `users`) and pending sign-in challenges. `confirm` must be the account
+   * address, so nothing is deleted by accident. Data outside Sovra's database is listed in `retained`.
+   */
+  async deleteAccount(session: Session, confirm: string) {
+    if (confirm.trim().toLowerCase() !== session.address.toLowerCase()) {
+      throw badRequest("To delete your account, confirm with your account address.", "confirmation_mismatch");
+    }
+    return this.database.db.transaction(async (tx) => {
+      const removed: Record<string, number> = {};
+      for (const [name, { table, owner }] of Object.entries(USER_DATA_TABLES)) {
+        const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` }).from(table).where(eq(owner, session.address));
+        removed[name] = Number(count);
+      }
+      const [{ onWalrus }] = await tx
+        .select({ onWalrus: sql<number>`count(*)::int` })
+        .from(memories)
+        .where(and(eq(memories.userAddress, session.address), isNotNull(memories.blobId)));
+
+      await tx.delete(authNonces).where(eq(authNonces.address, session.address));
+      const deleted = await tx.delete(users).where(eq(users.address, session.address)).returning({ address: users.address });
+      if (deleted.length === 0) throw notFound("Account");
+
+      return {
+        deleted: true,
+        address: session.address,
+        removed,
+        retained: [
+          ...(Number(onWalrus) > 0
+            ? [
+                `${Number(onWalrus)} memories were written to Walrus Memory. Their encrypted copies stay on Walrus until their storage period ends, because Walrus Memory has no delete. Sovra deleted its index of them, so they are never listed, recalled or used again.`,
+              ]
+            : []),
+          "Transactions on the Sui blockchain are public and permanent. Sovra only read them, and can't remove them.",
+          "Questions you asked Ask Sovra were sent to Groq to be answered; Groq's own retention policy applies to those requests.",
+        ],
+      };
+    });
   }
 
   /** A profile save shouldn't fail because Walrus Memory is down or not configured. */

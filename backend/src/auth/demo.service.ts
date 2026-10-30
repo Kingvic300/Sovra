@@ -44,19 +44,6 @@ export class DemoService {
   }
 
   /**
-   * True while a demo account exists and hasn't expired. Old shared-demo sessions have no expiry and fail.
-   * Without a database there is nothing to look up, so only the session's own expiry applies.
-   */
-  async isActive(address: string, now = new Date()) {
-    if (!this.database.available) return true;
-    const [row] = await this.database.db
-      .select({ expiresAt: users.expiresAt })
-      .from(users)
-      .where(and(eq(users.address, address), eq(users.method, "demo")));
-    return Boolean(row?.expiresAt && row.expiresAt > now);
-  }
-
-  /**
    * Deletes expired demo accounts; their rows in every user table go with them (ON DELETE CASCADE).
    * Only rows with an expiry are touched, so real accounts and the legacy shared demo are never deleted here.
    */

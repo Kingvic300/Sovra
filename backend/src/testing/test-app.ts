@@ -27,6 +27,7 @@ const GENEROUS_RATE_LIMITS = {
   RATE_LIMIT_IMPORT_PER_HOUR: "100000",
   RATE_LIMIT_DEMO_ASK_PER_HOUR: "100000",
   RATE_LIMIT_WALLET_SYNC_PER_HOUR: "100000",
+  RATE_LIMIT_EXPORT_PER_HOUR: "100000",
 };
 
 /** Stands in for Groq. Records every call so tests can check what the model would have seen. */
