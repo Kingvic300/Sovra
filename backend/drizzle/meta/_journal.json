@@ -50,6 +50,13 @@
       "when": 1793285910291,
       "tag": "0006_sui_transaction_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793366857027,
+      "tag": "0007_recurring_pause_state",
+      "breakpoints": true
     }
   ]
 }

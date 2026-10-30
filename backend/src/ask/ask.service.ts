@@ -77,7 +77,8 @@ export class AskService {
       ),
       attempt("upcoming bills", db, async () => {
         const horizon = new Date(Date.now() + UPCOMING_DAYS * 86_400_000).toISOString().slice(0, 10);
-        return (await this.recurring.list(session.address)).filter((r) => r.nextDate <= horizon);
+        // Paused charges are ones the user told Sovra to stop counting.
+        return (await this.recurring.active(session.address)).filter((r) => r.nextDate <= horizon);
       }),
       // "Can I afford it?" needs what's in the accounts. The summary also reads the live wallet.
       db ? attempt("account balances", true, () => this.accountBalances(session)) : undefined,
