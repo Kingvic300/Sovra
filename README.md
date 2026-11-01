@@ -133,8 +133,11 @@ Secrets (Tatum key, Walrus Memory delegate key, Groq key, session secret) live o
 │       └── lib/         Auth and data stores, API client, formatting, demo data
 ├── backend/             NestJS API (see backend/README.md)
 │   ├── src/             One module per area: auth, wallet, memory, ai, ask, ...
-│   └── drizzle/         SQL migrations
+│   ├── drizzle/         SQL migrations
+│   └── Dockerfile       Production image (see DEPLOYMENT.md)
 ├── design/              Design explorations: colour directions, logo options
+├── docker-compose.yml   Local Postgres + backend
+├── DEPLOYMENT.md        Docker image, hosting, env, cookies, cron
 ├── LICENSE
 └── README.md
 ```
@@ -177,6 +180,8 @@ npm run dev:frontend
 ```
 
 The Vite dev server proxies every `/api` request to the backend on port 8787. Once the backend has verified your session, every screen reads and saves through it.
+
+With Docker, `docker compose up --build` replaces the first three steps: it starts Postgres and the backend with migrations applied. See [DEPLOYMENT.md](DEPLOYMENT.md) for the image, production settings and scheduled jobs.
 
 ### Scripts
 
