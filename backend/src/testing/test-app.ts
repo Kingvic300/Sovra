@@ -3,7 +3,15 @@ import { Logger, type INestApplication } from "@nestjs/common";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { Test } from "@nestjs/testing";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-import { AI_PROVIDER, type AiProvider, type AnswerInput, type ExtractedTransaction, type MerchantToCategorize } from "../ai/ai.provider.js";
+import {
+  AI_PROVIDER,
+  type AiProvider,
+  type AnswerInput,
+  type CutPlanInput,
+  type CutPlanResult,
+  type ExtractedTransaction,
+  type MerchantToCategorize,
+} from "../ai/ai.provider.js";
 import { AppModule } from "../app.module.js";
 import { configureApp } from "../app.setup.js";
 import { SESSION_COOKIE } from "../auth/session.js";
@@ -63,6 +71,21 @@ export class FakeAi implements AiProvider {
     this.extracted.push(statementText);
     if (this.failure) throw this.failure;
     return this.statementRows;
+  }
+
+  readonly cutPlans: CutPlanInput[] = [];
+  /** What `planCuts` returns; tests set it. By default the model keeps everything a memory mentions and pauses the rest. */
+  cutResult: ((input: CutPlanInput) => Omit<CutPlanResult, "model">) | undefined;
+
+  async planCuts(input: CutPlanInput): Promise<CutPlanResult> {
+    this.cutPlans.push(input);
+    if (this.failure) throw this.failure;
+    const result = this.cutResult?.(input) ?? {
+      summary: "Fake plan.",
+      cuts: input.candidates.map((c) => ({ id: c.id, visits: c.kind === "skip" ? 1 : undefined, why: `Cut ${c.merchant}.` })),
+      kept: [],
+    };
+    return { ...result, model: "fake-model" };
   }
 }
 

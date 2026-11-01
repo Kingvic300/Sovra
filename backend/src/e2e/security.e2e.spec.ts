@@ -35,6 +35,9 @@ describe("security headers", () => {
       throw new Error("unexpected failure");
     },
     extractTransactions: async () => [],
+    planCuts: async () => {
+      throw new Error("unexpected failure");
+    },
   };
 
   before(async () => {

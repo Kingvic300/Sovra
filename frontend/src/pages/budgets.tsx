@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Scissors } from "lucide-react";
 import { AddBudgetDialog } from "@/components/budgets/add-budget-dialog";
 import { BudgetSuggestionCard } from "@/components/budgets/budget-suggestion";
+import { CutPlanDialog } from "@/components/budgets/cut-plan-dialog";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
 import { Progress } from "@/components/ui/progress";
 import { budgetViews, useAppData } from "@/lib/app-data";
 import { budgetTone } from "@/lib/budget-tone";
-import { CATEGORIES } from "@/lib/demo-data";
+import { CATEGORIES, type CategoryId } from "@/lib/demo-data";
 import { daysBetween, money, monthName } from "@/lib/format";
 import { useTitle } from "@/lib/use-title";
 
@@ -16,10 +17,15 @@ export default function BudgetsPage() {
   useTitle("Budgets");
   const { data } = useAppData();
   const [adding, setAdding] = useState(false);
+  /** The category being planned, "all" for every over-budget one, or null when closed. */
+  const [cutting, setCutting] = useState<CategoryId | "all" | null>(null);
   const budgets = budgetViews(data);
   const totalLimit = budgets.reduce((s, b) => s + b.limit, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
   const daysLeft = daysBetween(data.today, data.monthEnd);
+  // The plan reads the user's data on the server, so it needs a live session.
+  const canPlan = data.source === "live";
+  const overCount = budgets.filter((b) => b.over).length;
   const suggestions = data.suggestions.filter((s) => data.budgets.some((b) => b.category === s.category));
 
   return (
@@ -28,10 +34,18 @@ export default function BudgetsPage() {
         title={`${monthName(data.today)} budgets`}
         description={`${money(totalSpent, { whole: true })} of ${money(totalLimit, { whole: true })} spent, ${daysLeft} days left in the month. Hatched segments are renewals already scheduled.`}
         action={
-          <Button onClick={() => setAdding(true)}>
-            <Plus className="size-4" aria-hidden />
-            Add budget
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {canPlan && overCount > 1 && (
+              <Button variant="secondary" onClick={() => setCutting("all")}>
+                <Scissors className="size-4" aria-hidden />
+                What should I cut?
+              </Button>
+            )}
+            <Button onClick={() => setAdding(true)}>
+              <Plus className="size-4" aria-hidden />
+              Add budget
+            </Button>
+          </div>
         }
       />
 
@@ -63,6 +77,16 @@ export default function BudgetsPage() {
                       : `${money(-b.left, { whole: true })} over`
                     : `${money(b.left, { whole: true })} left${b.committed ? ` after ${b.committedLabel}` : ""}`}
                 </p>
+                {b.over && canPlan && (
+                  <button
+                    type="button"
+                    onClick={() => setCutting(b.category)}
+                    className="mt-2 inline-flex min-h-8 items-center gap-1.5 text-[14px] font-semibold text-cobalt hover:underline pointer-coarse:min-h-11"
+                  >
+                    <Scissors className="size-4" aria-hidden />
+                    What should I cut?
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -87,6 +111,11 @@ export default function BudgetsPage() {
       </div>
 
       <AddBudgetDialog open={adding} onClose={() => setAdding(false)} />
+      <CutPlanDialog
+        open={cutting !== null}
+        onClose={() => setCutting(null)}
+        category={cutting === "all" || cutting === null ? undefined : cutting}
+      />
     </div>
   );
 }

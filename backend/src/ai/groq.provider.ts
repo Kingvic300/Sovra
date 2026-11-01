@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AppError, notConfigured } from "../common/errors.js";
 import { ENV, type Env } from "../config/env.js";
 import { CATEGORY_IDS, CATEGORY_LABELS, type CategoryId } from "../shared/categories.js";
-import type { AiProvider, AnswerInput, ExtractedTransaction, MerchantToCategorize } from "./ai.provider.js";
+import type { AiProvider, AnswerInput, CutPlanInput, CutPlanResult, ExtractedTransaction, MerchantToCategorize } from "./ai.provider.js";
 
 const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
 const TIMEOUT_MS = 30_000;
@@ -40,6 +40,7 @@ const SYSTEM_PROMPT = `You are Sovra, a read-only personal finance assistant.
 - Never give investment, tax or legal advice. For those, suggest a qualified professional.
 - You cannot move, send, pause or cancel anything. Never claim you did; tell the user what they could do.
 - Amounts are in the currency named by context.currency (an ISO code such as NGN or USD), unless an item gives its own "currency". Write amounts with that currency's symbol, never assume dollars. suiWalletUsdc is USDC, a US dollar stablecoin.
+- When asked what to cut or how to stay under a budget, name specific items from budgetsThisMonth.renewalsStillDue and spendingByMerchantThisMonth, with their amounts, and say which budget each one helps. Never suggest cutting something the user said matters to them. A budget goes over when its projected amount is above its limit.
 - totalBalance is what the user has across accounts, in context.currency; accounts lists each one in its own currency. balancesNotCounted names accounts whose balance is unknown, so the total leaves them out.`;
 
 const CATEGORIZE_PROMPT = `You sort bank statement merchants into spending categories for a personal finance app.
@@ -111,6 +112,55 @@ const ExtractResult = z.object({
       balance: z.number().finite().nullable(),
     }),
   ),
+});
+
+const CUTS_PROMPT = `You help someone stay under their monthly budgets in a personal finance app.
+You get the categories that will go over this month (targets; "over" is how far over the limit) and candidate cuts taken from their own data:
+- "pause": stop counting a renewal still due this month. The saving is fixed. The user still has to cancel or pause it with the merchant.
+- "skip": skip some visits to a merchant they go to often. You choose "visits" from 1 to maxSkips; the saving is visits times perVisit.
+Choose the fewest, least painful cuts that bring each target to or under its limit. If every candidate together can't close the gap, choose the best ones and say so in the summary.
+A target with few or no candidates has mostly been spent already this month. Say that plainly, and name what to cut back on next month from its biggestThisMonth merchants, using their amounts as given. Never answer vaguely ("focus on other areas"): always name a merchant or a renewal.
+Respect what the user told Sovra (memories). Never cut something a memory says matters to them, keeps them safe or healthy, or that they decided to keep: list it in "kept" with the reason instead. When a cut or a kept item depends on a memory, copy that memory's text exactly into "memory" (cuts) or mention it in "why" (kept).
+Before choosing a cut, decide whether the merchant is a need (supermarkets and groceries, pharmacies and health, rent and bills, fuel or rides to work) or a want (takeaways, restaurants, delivery, cinema, bars, streaming, shopping treats). Cut wants first. Cut a need only when every want in that category together can't close the gap, and say so in "why".
+Use ids exactly as given. Set "visits" only for skip cuts, null for pause cuts.
+"why": one short sentence to the user ("you"), plain words, using only numbers from the input, amounts in the given currency with its symbol and two decimals when there are cents (e.g. $63.50).
+"summary": one or two sentences on what the plan does, linked to a goal when one fits. Don't state totals or end-of-month amounts: Sovra adds those.
+You can't pause, cancel or move anything yourself, so never say a cut is done.`;
+
+function cutsSchema(ids: string[]) {
+  const id = ids.length ? { type: "string", enum: ids } : { type: "string" };
+  return {
+    type: "object",
+    properties: {
+      summary: { type: "string" },
+      cuts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { id, visits: { type: ["integer", "null"] }, why: { type: "string" }, memory: { type: ["string", "null"] } },
+          required: ["id", "visits", "why", "memory"],
+          additionalProperties: false,
+        },
+      },
+      kept: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { id, why: { type: "string" } },
+          required: ["id", "why"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["summary", "cuts", "kept"],
+    additionalProperties: false,
+  };
+}
+
+const CutsResult = z.object({
+  summary: z.string().trim().max(600),
+  cuts: z.array(z.object({ id: z.string(), visits: z.number().int().nullable(), why: z.string().max(400), memory: z.string().nullable() })),
+  kept: z.array(z.object({ id: z.string(), why: z.string().max(400) })),
 });
 
 /** Groq chat completions (OpenAI-compatible). GPT-OSS models: reasoning stays out of the response. */
@@ -205,6 +255,47 @@ export class GroqAiProvider implements AiProvider {
     return parsed.data.items.filter((t) => t.amount !== 0);
   }
 
+  async planCuts(input: CutPlanInput): Promise<CutPlanResult> {
+    const candidates = input.candidates.map((c) =>
+      c.kind === "pause"
+        ? { id: c.id, kind: c.kind, category: c.category, merchant: c.merchant, saving: c.saving, nextDate: c.nextDate }
+        : {
+            id: c.id,
+            kind: c.kind,
+            category: c.category,
+            merchant: c.merchant,
+            perVisit: c.perVisit,
+            maxSkips: c.maxSkips,
+            visitsThisMonth: c.visitsThisMonth,
+            spentThisMonth: c.spentThisMonth,
+          },
+    );
+    const user = [
+      `Today is ${input.today}. Currency: ${input.currency}.`,
+      `Targets (JSON): ${JSON.stringify(input.targets)}`,
+      `Candidates (JSON): ${JSON.stringify(candidates)}`,
+      `Goals (JSON): ${JSON.stringify(input.goals)}`,
+      input.memories.length
+        ? `What the user told Sovra:\n${input.memories.map((m) => `- ${m}`).join("\n")}`
+        : "What the user told Sovra: nothing relevant found.",
+    ].join("\n\n");
+    const result = await this.chat({
+      model: this.env.GROQ_MODEL,
+      messages: [
+        { role: "system", content: CUTS_PROMPT },
+        { role: "user", content: user },
+      ],
+      maxTokens: 4096,
+      temperature: 0.3,
+      reasoningEffort: "medium",
+      jsonSchema: { name: "budget_cuts", schema: cutsSchema(input.candidates.map((c) => c.id)) },
+    });
+    const parsed = CutsResult.safeParse(parseJson(result.content));
+    if (!parsed.success) throw upstreamError("Sovra's AI model gave an answer it couldn't use. Try again.");
+    const { summary, cuts, kept } = parsed.data;
+    return { summary, cuts, kept, model: result.model };
+  }
+
   private async chat(options: ChatOptions): Promise<{ content: string; model: string }> {
     const key = this.env.GROQ_API_KEY;
     if (!key) throw notConfigured("Groq (GROQ_API_KEY)");
@@ -224,18 +315,28 @@ export class GroqAiProvider implements AiProvider {
       };
     }
 
-    let res: Response;
-    try {
-      res = await fetch(GROQ_CHAT_URL, {
+    const send = () =>
+      fetch(GROQ_CHAT_URL, {
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS),
       });
+    let res: Response;
+    try {
+      res = await send();
+      // One retry for a dropped connection or a server error: these are usually momentary.
+      if (res.status >= 500) res = await send();
     } catch (err) {
       const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
       this.logger.warn(`Groq request failed: ${err instanceof Error ? err.message : String(err)}`);
-      throw upstreamError(timedOut ? "The AI model took too long to answer. Try again." : undefined);
+      if (timedOut) throw upstreamError("The AI model took too long to answer. Try again.");
+      try {
+        res = await send();
+      } catch (retryErr) {
+        this.logger.warn(`Groq retry failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`);
+        throw upstreamError();
+      }
     }
 
     if (!res.ok) {
@@ -250,6 +351,15 @@ export class GroqAiProvider implements AiProvider {
     const parsed = ChatResponse.safeParse(await res.json().catch(() => null));
     if (!parsed.success) throw upstreamError();
     return { content: parsed.data.choices[0].message.content ?? "", model: parsed.data.model ?? options.model };
+  }
+}
+
+/** The model's JSON output, or null when it isn't JSON. */
+function parseJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return null;
   }
 }
 

@@ -1,3 +1,4 @@
+import type { CutCandidate, CutPick, CutTarget, KeptPick } from "../cuts/cut-plan.js";
 import type { CategoryId } from "../shared/categories.js";
 
 export type MerchantToCategorize = {
@@ -16,6 +17,20 @@ export type AnswerInput = {
   missing: string[];
 };
 
+export type CutPlanInput = {
+  currency: string;
+  today: string;
+  /** Categories to bring back under their limit. */
+  targets: CutTarget[];
+  candidates: CutCandidate[];
+  /** What the user told Sovra that may bear on the cuts, word for word. */
+  memories: string[];
+  goals: { name: string; target: number; saved: number; due: string }[];
+};
+
+/** The model's choice among the candidates. Amounts are never taken from it: see applyPicks. */
+export type CutPlanResult = { summary: string; cuts: CutPick[]; kept: KeptPick[]; model: string };
+
 /** One row read from a statement that isn't a table, such as a PDF. */
 export type ExtractedTransaction = { date: string; description: string; amount: number; balance: number | null };
 
@@ -27,6 +42,8 @@ export interface AiProvider {
   answer(input: AnswerInput): Promise<{ text: string; model: string }>;
   /** Reads transactions out of a statement's plain text. Amounts are signed: negative is money out. */
   extractTransactions(statementText: string): Promise<ExtractedTransaction[]>;
+  /** Picks which candidate cuts to suggest, and why, respecting what the user told Sovra. */
+  planCuts(input: CutPlanInput): Promise<CutPlanResult>;
 }
 
 export const AI_PROVIDER = Symbol("AI_PROVIDER");

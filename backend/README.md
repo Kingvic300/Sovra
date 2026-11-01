@@ -112,6 +112,7 @@ All routes are under `/api`. Everything except `health` and `auth/*` needs the s
 | GET | `/budgets/suggestions` | Limit changes suggested from the last three full months → `{suggestions: [{id, category, label, direction, from, to, text, evidence}]}` (see below) |
 | POST | `/budgets/suggestions/:id/accept` | Sets the suggested limit and remembers the decision. `404` if it isn't on offer, `409 already_decided` if already answered |
 | POST | `/budgets/suggestions/:id/dismiss` | Keeps the limit; that category and direction isn't suggested again for 90 days |
+| POST | `/budgets/cuts` | `{category?}` → what to cut to stay under budget this month (see [Budget cuts](#budget-cuts)): `{status, by, summary, cuts: [{kind, merchant, recurringId, visits, perVisit, saving, why, memory}], kept, targets: [{limit, projected, after}], totalSaving, closesGap}`. Changes nothing. Counts against the `ask` rate limit |
 | PUT | `/budgets/:category` | `{limit}` |
 | DELETE | `/budgets/:category` | Removes a limit |
 | GET | `/goals` | Savings goals |
@@ -159,6 +160,17 @@ Known limitation: counters live in process memory. Each instance counts separate
 - **Lower** when spending stayed under 60% of the limit in all 3 months (and wasn't zero). The new limit is the highest month plus 20%, rounded up to $10, never below $10, and only if this month's projected spending (spent + renewals still due) fits under it.
 
 Without transactions going back to the start of the first of those months, there are no suggestions. Ids are `category:direction:to`, so the same data always gives the same ids. Accepting or dismissing stores a decision (`budget_suggestion_decisions`) and a memory, best-effort. A dismissed category and direction stays hidden for 90 days, even if the limit changes.
+
+## Budget cuts
+
+`POST /budgets/cuts` answers "what should I cut?" for a category that will go over its limit (spent plus renewals still due), or for every one that will (`src/cuts/`).
+
+1. **Candidates come from the user's data only** (`cut-plan.ts`). Each active renewal still due this month can be paused, for the renewal's amount. Each merchant the user paid at least twice in the last 90 days, and is likely to pay again before the month ends, can be skipped: up to that many visits (8 at most), at the average amount per visit. Recurring merchants aren't offered as skips.
+2. **The AI model chooses and explains.** Groq gets the targets, the candidates, the user's goals, and memories recalled for those categories and merchants. It returns candidate ids, a number of visits to skip, one sentence of reasoning for each cut, what it won't cut ("kept") and why, and a summary. The prompt asks for the fewest cuts that close the gap, cuts wants (takeaways, cinema, streaming) before needs (groceries, health, rides to work), and never cuts something a memory says matters to the user. The JSON schema only allows the candidates' ids.
+3. **The server checks the answer.** Unknown or repeated ids are dropped, and skips are held to the candidate's limit. Every saving and end-of-month figure is computed from the candidates, never taken from the model. A quoted memory is kept only if it is a real one.
+4. **Without the model** (no `GROQ_API_KEY`, or Groq fails), simple rules make the plan instead (`by: "rules"`, with a `note`). They pause the biggest renewals first, then skip the priciest habits until the gap closes. Anything a memory mentions is kept.
+
+When there's nothing left to cut this month (`status: "nothing_to_cut"`, typically near the month's end), the summary names the category's biggest merchants to cut back on next month. A category on track or without a budget gets `status: "on_track"`. The plan changes nothing: the user pauses a charge or commits to a skip from the Budgets page, and both are remembered.
 
 ## Reminders and scheduled jobs
 
