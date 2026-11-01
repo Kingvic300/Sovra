@@ -8,6 +8,7 @@ import { ZodPipe } from "../common/zod.pipe.js";
 import { RateLimit } from "../security/rate-limit.js";
 import { CATEGORY_IDS } from "../shared/categories.js";
 import { CURRENCY_CODE } from "../shared/currency.js";
+import { calendarDay } from "../shared/due-date.js";
 import { MeService } from "./me.service.js";
 
 const ProfileBody = z.object({
@@ -18,7 +19,8 @@ const ProfileBody = z.object({
     .object({
       name: z.string().trim().min(1).max(80),
       target: z.number().positive().max(10_000_000),
-      due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "due must be YYYY-MM-DD"),
+      /** Past dates are refused only when the goal changes: re-saving a profile must keep working after it falls due. */
+      due: calendarDay,
     })
     .nullish(),
   limit: z
