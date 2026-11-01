@@ -211,6 +211,11 @@ describe("accounts and balances", () => {
     assert.equal(summary.wallet.status, "skipped_demo");
     assert.equal(summary.trend.length, 30);
     assert.equal((await client.get("/accounts")).body.accounts.length, 2);
+    for (const path of ["/wallet/balance", "/wallet/transactions", "/wallet/deposit"]) {
+      const res = await client.get(path);
+      assert.equal(res.status, 403, path);
+      assert.equal(res.body.error.code, "demo_not_supported", path);
+    }
     assert.equal(tatum.calls, calls);
   });
 

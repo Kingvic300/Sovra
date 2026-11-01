@@ -2,6 +2,7 @@ import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { useAppData } from "@/lib/app-data";
 import { money } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
@@ -11,6 +12,7 @@ export function RefreshBalanceButton() {
   const toast = useToast();
   const { reload } = useAppData();
   const [busy, setBusy] = useState(false);
+  const { session } = useAuth();
 
   async function refresh() {
     setBusy(true);
@@ -28,6 +30,8 @@ export function RefreshBalanceButton() {
     }
   }
 
+  // The demo's wallet is sample data with no real address behind it, so there is nothing to read.
+  if (session?.method === "demo") return null;
   return (
     <Button variant="secondary" size="sm" onClick={refresh} disabled={busy}>
       <RefreshCw className={`size-4 ${busy ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden />

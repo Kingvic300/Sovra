@@ -1,6 +1,6 @@
-import { type CanActivate, Controller, type ExecutionContext, Get, HttpCode, Injectable, Post, Query, UseGuards } from "@nestjs/common";
+import { type CanActivate, Controller, type ExecutionContext, Get, HttpCode, HttpStatus, Injectable, Post, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
-import { conflict } from "../common/errors.js";
+import { AppError, conflict } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { CurrentSession, type RequestWithSession, type Session } from "../auth/session.js";
 import { SessionGuard } from "../auth/session.guard.js";
@@ -11,13 +11,17 @@ import { WalletSyncService } from "./wallet-sync.service.js";
 const TransfersQuery = z.object({ limit: z.coerce.number().int().min(1).max(50).default(25) });
 
 /**
- * Email accounts' addresses are ids nobody holds keys for. Showing one as a deposit address
- * would let someone send USDC that can never be spent, so these routes refuse them.
+ * Email and demo accounts' addresses are ids nobody holds keys for. Showing one as a deposit
+ * address would let someone send USDC that can never be spent, and reading one from Tatum
+ * wastes a call, so these routes refuse them.
  */
 @Injectable()
 class HasWalletGuard implements CanActivate {
   canActivate(ctx: ExecutionContext) {
     const session = ctx.switchToHttp().getRequest<RequestWithSession>().session;
+    if (session?.method === "demo") {
+      throw new AppError(HttpStatus.FORBIDDEN, "demo_not_supported", "Demo accounts don't have a real Sui wallet.");
+    }
     if (session?.method === "email") throw conflict("Connect a Sui wallet to see balances or top up.", "no_wallet");
     return true;
   }
