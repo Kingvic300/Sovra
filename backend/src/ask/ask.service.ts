@@ -74,9 +74,8 @@ export class AskService {
       }),
       attempt("budgets", db, () => this.budgets.list(session.address, month)),
       attempt("goals", db, () => this.goals.list(session.address)),
-      attempt("recent transactions", db, () =>
-        this.transactions.list(session.address, { month, limit: RECENT_TRANSACTIONS }),
-      ),
+      // The latest few, whatever the month: on the 1st, "this month" would be almost empty.
+      attempt("recent transactions", db, () => this.transactions.list(session.address, { limit: RECENT_TRANSACTIONS })),
       attempt("spending by merchant", db, () => this.transactions.list(session.address, { month, limit: 500 })),
       attempt("upcoming bills", db, async () => {
         const horizon = new Date(Date.now() + UPCOMING_DAYS * 86_400_000).toISOString().slice(0, 10);
