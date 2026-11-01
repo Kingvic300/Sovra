@@ -32,8 +32,7 @@ export function EntertainmentInsight() {
   const kept = data.answered.includes(INSIGHT_ID);
 
   function pause() {
-    setRecurringStatus(NETFLIX_ID, "paused");
-    const memoryId = addMemory({
+    const memoryId = setRecurringStatus(NETFLIX_ID, "paused", {
       kind: "decision",
       text: `You paused Netflix in ${month} to stay under your entertainment limit.`,
       highlight: `paused Netflix in ${month}`,
@@ -46,7 +45,7 @@ export function EntertainmentInsight() {
         label: "Undo",
         onClick: () => {
           setRecurringStatus(NETFLIX_ID, "active");
-          removeMemory(memoryId);
+          if (memoryId) removeMemory(memoryId);
         },
       },
     });

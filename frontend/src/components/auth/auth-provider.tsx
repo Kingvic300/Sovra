@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDAppKit, useWalletConnection, type UiWallet } from "@mysten/dapp-kit-react";
 import { WalletFailedBadge } from "@/components/ui/wallet-badge";
-import { api } from "@/lib/api";
+import { api, UNAUTHORIZED_EVENT } from "@/lib/api";
 import { AuthContext, type AuthState, type Profile, type Session } from "@/lib/auth-context";
 import { ACCOUNTS, USER_NAME } from "@/lib/demo-data";
 import {
@@ -181,6 +181,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeEmailSession(null);
     setEmailSession(null);
   }, [dAppKit, connection.isConnected]);
+
+  // A data route answered 401 after the session was verified: it ended on the server, so end it here too.
+  useEffect(() => {
+    if (serverStatus !== "verified") return;
+    const onUnauthorized = () => {
+      void signOut();
+      toast.info({ title: "Your session ended", description: "Sign in again to continue." });
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized, { once: true });
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, [serverStatus, signOut, toast]);
 
   const saveProfile = useCallback(
     async (next: Profile) => {

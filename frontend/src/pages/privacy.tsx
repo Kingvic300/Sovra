@@ -155,10 +155,11 @@ const SECTIONS: LegalSection[] = [
     title: "How long we keep information",
     body: (
       <p>
-        We keep your information while you have an account. If you ask us to delete your account, we delete the data we
-        hold, such as imported transactions and your memory index. Encrypted memories already written to
-        Walrus may remain until their storage period ends, as explained above. Public blockchain data stays on the Sui
-        blockchain and is outside our control.
+        We keep your information while you have an account. When you delete your account, we delete the data we hold,
+        such as your profile, imported transactions, budgets, goals, Ask history and memory index, and sign you out on
+        every device. Some copies are outside our control: encrypted memories already written to Walrus may remain
+        until their storage period ends (Sovra never uses them again), public blockchain data stays on the Sui
+        blockchain, and questions sent to Groq follow Groq's own retention policy.
       </p>
     ),
   },
@@ -182,9 +183,9 @@ const SECTIONS: LegalSection[] = [
           <li>See and forget individual memories on the Memory page.</li>
           <li>Choose which statements to upload, and stop importing at any time.</li>
           <li>Sign out, which clears your session from this browser.</li>
+          <li>Download a copy of your data, or delete your account, under Your data on the Profile page.</li>
           <li>
-            Ask for a copy of your data or for your account to be deleted by emailing{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+            Or ask for either by emailing <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
           </li>
         </ul>
       </>

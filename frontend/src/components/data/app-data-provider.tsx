@@ -11,15 +11,16 @@ import {
   type AppDataApi,
   type MemoryOutcome,
   type NewMemory,
+  type Reminder,
 } from "@/lib/app-data";
 import { useAuth } from "@/lib/auth-context";
-import { NoDatabaseError, loadLiveData, type ApiMemory } from "@/lib/backend";
+import { NoDatabaseError, loadLiveData, toMemory, type ApiMemory } from "@/lib/backend";
 import { CATEGORIES } from "@/lib/demo-data";
 import { setDisplayCurrency } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 
 const SAMPLE_KEY = "sovra.data.v2";
-/** Per address: what the user paused in Sovra and which insights they answered. The backend doesn't keep these. */
+/** Per address: which insights the user answered. The backend doesn't keep these. */
 const localKey = (address: string) => `sovra.local.${address}`;
 
 /** The parts of the sample story a visitor can change. */
@@ -34,14 +35,14 @@ function loadSample(): AppData {
   }
 }
 
-type LocalState = { paused: string[]; answered: string[] };
+type LocalState = { answered: string[] };
 
 function readLocal(address: string): LocalState {
   try {
     const raw = localStorage.getItem(localKey(address));
-    return raw ? { paused: [], answered: [], ...(JSON.parse(raw) as Partial<LocalState>) } : { paused: [], answered: [] };
+    return { answered: raw ? ((JSON.parse(raw) as Partial<LocalState>).answered ?? []) : [] };
   } catch {
-    return { paused: [], answered: [] };
+    return { answered: [] };
   }
 }
 
@@ -121,7 +122,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const today = localToday();
     const local = readLocal(address);
     try {
-      const fetched = await loadLiveData(today, new Set(local.paused));
+      const fetched = await loadLiveData(today);
       if (run !== generation.current) return null;
       const base = { ...fetched, today, monthEnd: monthEndOf(today), payday: nextPayday(today, payday) };
       const data: AppData = { ...base, source: "live", hiddenMemories: 0, monthNet: liveMonthNet(base), answered: local.answered };
@@ -147,7 +148,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     void fetchLive().then((apply) => apply && setLoaded(apply));
   }, [verified, fetchLive]);
 
-  // Sample changes stay in this browser. Live data stays on the server, except pauses and answers.
+  // Sample changes stay in this browser. Live data stays on the server, except answered insights.
   useEffect(() => {
     const saved = Object.fromEntries(SAMPLE_SAVED.map((k) => [k, sample[k]]));
     localStorage.setItem(SAMPLE_KEY, JSON.stringify(saved));
@@ -155,11 +156,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!loaded || loaded.data === "failed") return;
-    const paused = loaded.data.recurring.filter((r) => r.status === "paused").map((r) => r.id);
-    localStorage.setItem(localKey(loaded.address), JSON.stringify({ paused, answered: loaded.data.answered } satisfies LocalState));
+    localStorage.setItem(localKey(loaded.address), JSON.stringify({ answered: loaded.data.answered } satisfies LocalState));
   }, [loaded]);
 
   const reload = useCallback(() => (liveRef.current ? load() : Promise.resolve()), [load]);
+
+  /** Re-reads what the server changes as a side effect of a decision: the memory it wrote and the reminders. */
+  const refreshDerived = useCallback(async () => {
+    const [memories, reminders] = await Promise.all([
+      api<{ memories: ApiMemory[] }>("/memories").catch(() => null),
+      api<{ reminders: Reminder[] }>("/reminders").catch(() => null),
+    ]);
+    setData((d) => ({
+      ...d,
+      memories: memories ? memories.memories.map(toMemory) : d.memories,
+      reminders: reminders ? reminders.reminders : d.reminders,
+    }));
+  }, [setData]);
 
   /** Server id for a row, waiting for it if the row is still being created. */
   const serverId = useCallback((id: string) => pending.current.get(id) ?? Promise.resolve(id), []);
@@ -222,9 +235,54 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [createMemory, setData],
   );
 
-  const setRecurringStatus = useCallback<AppDataApi["setRecurringStatus"]>((id, status) => {
-    setData((d) => ({ ...d, recurring: d.recurring.map((r) => (r.id === id ? { ...r, status } : r)) }));
-  }, [setData]);
+  const setRecurringStatus = useCallback<AppDataApi["setRecurringStatus"]>(
+    (id, status, memory) => {
+      setData((d) => ({ ...d, recurring: d.recurring.map((r) => (r.id === id ? { ...r, status } : r)) }));
+      if (!liveRef.current) return memory ? addMemory(memory) : null;
+      // The server remembers the decision and resolves or reopens the charge's renewal reminder.
+      api(`/recurring/${encodeURIComponent(id)}/${status === "paused" ? "pause" : "resume"}`, { method: "POST" })
+        .then(refreshDerived)
+        .catch((err: unknown) => {
+          fail(status === "paused" ? "Couldn't pause that charge" : "Couldn't count that charge again", err);
+          void reload();
+        });
+      return null;
+    },
+    [addMemory, refreshDerived, fail, reload, setData],
+  );
+
+  const decideSuggestion = useCallback<AppDataApi["decideSuggestion"]>(
+    (s, decision, memory) => {
+      setData((d) => ({
+        ...d,
+        budgets:
+          decision === "accepted" ? d.budgets.map((b) => (b.category === s.category ? { ...b, limit: s.to } : b)) : d.budgets,
+        answered: [...new Set([...d.answered, `suggestion-${s.id}`])],
+      }));
+      if (!liveRef.current) return addMemory(memory);
+      // Accepting sets the limit on the server too; both write the decision to memory there.
+      api(`/budgets/suggestions/${encodeURIComponent(s.id)}/${decision === "accepted" ? "accept" : "dismiss"}`, { method: "POST" })
+        .then(refreshDerived)
+        .catch((err: unknown) => {
+          fail("Couldn't save your answer", err);
+          void reload();
+        });
+      return null;
+    },
+    [addMemory, refreshDerived, fail, reload, setData],
+  );
+
+  const dismissReminder = useCallback<AppDataApi["dismissReminder"]>(
+    (id) => {
+      setData((d) => ({ ...d, reminders: d.reminders?.filter((r) => r.id !== id) ?? null }));
+      if (!liveRef.current) return;
+      api(`/reminders/${encodeURIComponent(id)}/dismiss`, { method: "POST" }).catch((err: unknown) => {
+        fail("Couldn't dismiss that reminder", err);
+        void reload();
+      });
+    },
+    [fail, reload, setData],
+  );
 
   const upsertBudget = useCallback<AppDataApi["upsertBudget"]>(
     (b) => {
@@ -342,6 +400,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       removeMemory,
       restoreMemory,
       setRecurringStatus,
+      decideSuggestion,
+      dismissReminder,
       upsertBudget,
       addGoal,
       removeGoal,
@@ -350,7 +410,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       markAnswered,
       reset,
     }),
-    [data, reload, addMemory, removeMemory, restoreMemory, setRecurringStatus, upsertBudget, addGoal, removeGoal, recategorize, rememberCategory, markAnswered, reset],
+    [data, reload, addMemory, removeMemory, restoreMemory, setRecurringStatus, decideSuggestion, dismissReminder, upsertBudget, addGoal, removeGoal, recategorize, rememberCategory, markAnswered, reset],
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

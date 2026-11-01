@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { EmailSignInDialog } from "@/components/auth/email-sign-in-dialog";
+import { YourDataPanel } from "@/components/profile/your-data-panel";
 import { Button } from "@/components/ui/button";
 import { buttonClass } from "@/components/ui/button-class";
 import { fieldClass } from "@/components/ui/field-class";
@@ -304,6 +305,8 @@ export default function ProfilePage() {
               <LinkRow to="/terms" icon={FileText} title="Terms" />
             </ul>
           </Panel>
+
+          {auth.session && <YourDataPanel />}
         </div>
 
         <div className="flex flex-col gap-5">
