@@ -19,6 +19,7 @@ import { notFound } from "../common/errors.js";
 import { ZodPipe } from "../common/zod.pipe.js";
 import { DatabaseService } from "../database/database.service.js";
 import { goals, users } from "../database/schema.js";
+import { futureDueDate } from "../shared/due-date.js";
 
 const toApi = (g: typeof goals.$inferSelect) => ({
   id: g.id,
@@ -30,11 +31,12 @@ const toApi = (g: typeof goals.$inferSelect) => ({
 });
 
 const money = z.number().min(0).max(10_000_000);
+
 const GoalBody = z.object({
   name: z.string().trim().min(1).max(80),
   target: money.positive(),
   saved: money.default(0),
-  due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "due must be YYYY-MM-DD"),
+  due: futureDueDate,
   weekly: money.nullish(),
 });
 /** No defaults here: a field left out of a PATCH must keep its value, not reset to the create default. */

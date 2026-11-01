@@ -6,6 +6,7 @@ import { DatabaseService } from "../database/database.service.js";
 import { authNonces, budgets, goals, memories, profiles, users } from "../database/schema.js";
 import { MemwalService } from "../memory/memwal.service.js";
 import type { CategoryId } from "../shared/categories.js";
+import { isPastDue } from "../shared/due-date.js";
 import { goalSentence, limitSentence, paydaySentence } from "../shared/memory-text.js";
 import { USER_DATA_TABLES } from "./user-data.js";
 
@@ -65,6 +66,9 @@ export class MeService {
       .onConflictDoNothing();
 
     const [previous] = await db.select().from(profiles).where(eq(profiles.userAddress, session.address));
+    const changed = (a: unknown, b: unknown) => canonicalJson(a) !== canonicalJson(b);
+    const goalChanged = !!input.goal && changed(input.goal, previous?.goal);
+    if (input.goal && goalChanged && isPastDue(input.goal.due)) throw badRequest("goal.due: due can't be in the past", "invalid_request");
     const values = {
       name: input.name,
       onboarded: input.onboarded,
@@ -82,9 +86,8 @@ export class MeService {
       .returning();
 
     const memories: MemoryOutcome[] = [];
-    const changed = (a: unknown, b: unknown) => canonicalJson(a) !== canonicalJson(b);
 
-    if (input.goal && changed(input.goal, previous?.goal)) {
+    if (input.goal && goalChanged) {
       await db.insert(goals).values({
         userAddress: session.address,
         name: input.goal.name,

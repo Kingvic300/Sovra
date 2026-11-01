@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { eq } from "drizzle-orm";
-import { accounts, budgets, categoryRules, goals } from "../database/schema.js";
+import { accounts, budgets, categoryRules, goals, profiles } from "../database/schema.js";
 import { FakeAi, createTestApp, csvForm, signIn, type TestApp } from "../testing/test-app.js";
 import { createTestDatabase, type TestDatabase } from "../testing/test-database.js";
 
@@ -97,6 +97,20 @@ describe("user data routes", () => {
       const res = await client.put("/me/profile", { ...profile, payday: 40 });
       assert.equal(res.status, 400);
       assert.match(res.body.error.message, /payday/);
+    });
+
+    it("refuses a new goal that is already due, but still re-saves an old one", async () => {
+      const { client, address } = await newUser();
+      const past = { ...profile, goal: { ...profile.goal, due: "2020-01-31" } };
+      const refused = await client.put("/me/profile", past);
+      assert.equal(refused.status, 400);
+      assert.match(refused.body.error.message, /past/);
+      assert.equal((await client.put("/me/profile", { ...profile, goal: { ...profile.goal, due: "2027-02-30" } })).status, 400);
+
+      // A goal saved before its date passed must not block later profile edits.
+      await client.put("/me/profile", profile);
+      await database.db.update(profiles).set({ goal: past.goal }).where(eq(profiles.userAddress, address));
+      assert.equal((await client.put("/me/profile", { ...past, name: "Ada L." })).status, 200);
     });
   });
 
@@ -274,6 +288,13 @@ describe("user data routes", () => {
     it("validates goals and ids", async () => {
       const { client } = await newUser();
       assert.equal((await client.post("/goals", { name: "", target: 0, due: "soon" })).status, 400);
+      const past = await client.post("/goals", { name: "Late", target: 10, due: "2020-01-31" });
+      assert.equal(past.status, 400);
+      assert.match(past.body.error.message, /past/);
+      assert.equal((await client.post("/goals", { name: "Odd", target: 10, due: "2027-02-30" })).status, 400);
+      const goal = (await client.post("/goals", { name: "Soon", target: 10, due: "2027-01-31" })).body;
+      assert.equal((await client.patch(`/goals/${goal.id}`, { due: "2020-01-31" })).status, 400);
+      assert.equal((await client.patch(`/goals/${goal.id}`, { saved: 5 })).status, 200);
       assert.equal((await client.patch("/goals/not-a-uuid", { saved: 1 })).status, 400);
       assert.equal((await client.delete("/goals/00000000-0000-0000-0000-000000000000")).status, 404);
     });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CATEGORY_IDS, CATEGORY_LABELS, guessCategory, merchantKey } from "./categories.js";
+import { calendarDay, futureDueDate, isPastDue } from "./due-date.js";
 import { categoryRuleSentence, goalSentence, limitSentence, paydaySentence } from "./memory-text.js";
 
 describe("merchantKey", () => {
@@ -62,5 +63,27 @@ describe("memory sentences", () => {
 
   it("words a learned category rule", () => {
     assert.equal(categoryRuleSentence("Amazon", "business"), "Amazon transactions are business supplies.");
+  });
+});
+
+describe("due dates", () => {
+  const now = new Date("2026-11-01T12:00:00Z");
+
+  it("counts yesterday (UTC) as not yet past, for users ahead of UTC", () => {
+    assert.equal(isPastDue("2026-11-01", now), false);
+    assert.equal(isPastDue("2026-10-31", now), false);
+    assert.equal(isPastDue("2026-10-30", now), true);
+  });
+
+  it("accepts only real calendar dates", () => {
+    assert.equal(calendarDay.safeParse("2028-02-29").success, true);
+    assert.equal(calendarDay.safeParse("2027-02-29").success, false);
+    assert.equal(calendarDay.safeParse("2027-13-01").success, false);
+    assert.equal(calendarDay.safeParse("soon").success, false);
+  });
+
+  it("refuses past dates for goals", () => {
+    assert.equal(futureDueDate.safeParse("2020-01-01").success, false);
+    assert.equal(futureDueDate.safeParse("2099-01-01").success, true);
   });
 });
