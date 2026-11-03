@@ -12,6 +12,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ShellStats } from "@/lib/app-data";
+import { TRANSACTIONS_LOADED } from "@/lib/backend";
+
+/** A count badge, hidden at zero so an empty list doesn't look like a broken number. */
+const count = (n: number): NavBadge | undefined =>
+  n > 0 ? { text: n >= TRANSACTIONS_LOADED ? `${TRANSACTIONS_LOADED}+` : String(n), tone: "count" } : undefined;
 
 export type NavBadge = { text: string; tone: "count" | "caution" };
 export type NavItem = { href: string; label: string; icon: LucideIcon; badge?: NavBadge };
@@ -26,7 +31,7 @@ export function navGroups(stats: ShellStats): { label: string; items: NavItem[] 
           href: "/app/transactions",
           label: "Transactions",
           icon: ArrowLeftRight,
-          badge: { text: String(stats.transactions), tone: "count" },
+          badge: count(stats.transactions),
         },
         {
           href: "/app/budgets",
@@ -53,7 +58,7 @@ export function navGroups(stats: ShellStats): { label: string; items: NavItem[] 
           href: "/app/memory",
           label: "Memory",
           icon: Highlighter,
-          badge: { text: String(stats.memories), tone: "count" },
+          badge: count(stats.memories),
         },
       ],
     },
