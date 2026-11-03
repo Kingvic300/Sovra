@@ -24,6 +24,13 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
   const { data, reload } = useAppData();
   const [params, setParams] = useSearchParams();
   const askedFromUrl = useRef(false);
+  const listRef = useRef<HTMLOListElement>(null);
+
+  // Keep the newest message in view inside the thread's own scroll area.
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTo({ top: list.scrollHeight, behavior: messages.length > initial.length ? "smooth" : "auto" });
+  }, [messages, thinking, initial.length]);
 
   async function send(text: string) {
     const question = text.trim();
@@ -69,8 +76,8 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-card bg-card shadow-card">
-      <ol className="flex flex-col gap-6 px-5 py-6 sm:px-8" aria-live="polite">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-card bg-card shadow-card">
+      <ol ref={listRef} className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain px-5 py-6 sm:px-8" aria-live="polite">
         {messages.map((m) =>
           m.role === "user" ? (
             <li key={m.id} className="max-w-[80%] self-end rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-white">
@@ -112,7 +119,7 @@ export function ChatThread({ initial }: { initial: ChatMessage[] }) {
         )}
       </ol>
 
-      <div className="border-t border-line bg-porcelain/40 px-5 py-4 sm:px-8">
+      <div className="shrink-0 border-t border-line bg-porcelain/40 px-5 py-4 sm:px-8">
         <div className="mb-3 flex flex-wrap gap-2">
           {SUGGESTIONS.map((s) => (
             <button
