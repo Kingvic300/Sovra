@@ -1,11 +1,14 @@
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import {
   accounts,
+  agentKeys,
   askMessages,
   budgetSuggestionDecisions,
   budgets,
   categoryRules,
   goals,
+  guardChecks,
+  guardPolicies,
   memories,
   profiles,
   recurringStates,
@@ -30,6 +33,9 @@ export const USER_DATA_TABLES: Record<string, { table: PgTable; owner: PgColumn 
   recurringStates: { table: recurringStates, owner: recurringStates.userAddress },
   budgetSuggestionDecisions: { table: budgetSuggestionDecisions, owner: budgetSuggestionDecisions.userAddress },
   reminders: { table: reminders, owner: reminders.userAddress },
+  guardPolicies: { table: guardPolicies, owner: guardPolicies.userAddress },
+  agentKeys: { table: agentKeys, owner: agentKeys.userAddress },
+  guardChecks: { table: guardChecks, owner: guardChecks.userAddress },
 };
 
 /**

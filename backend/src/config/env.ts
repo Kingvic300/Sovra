@@ -29,6 +29,8 @@ const EnvSchema = z.object({
   NEAR_AI_MODEL: z.string().trim().min(1).default("Qwen/Qwen3.8-27B"),
   /** Private audits per hour per IP. The auditor needs no account, and each audit is a paid AI call. */
   RATE_LIMIT_AUDIT_PER_HOUR: positiveInt(20),
+  /** Spending guard checks per minute per IP, from people and agent keys. */
+  RATE_LIMIT_GUARD_PER_MINUTE: positiveInt(120),
   /**
    * Express "trust proxy": how many proxies sit in front of the API ("1" behind one load balancer),
    * or "false" when clients connect directly. Client IPs, and so per-IP rate limits, depend on it.

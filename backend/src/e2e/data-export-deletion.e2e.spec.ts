@@ -68,6 +68,9 @@ describe("data export and account deletion", () => {
     await client.delete(`/memories/${forgotten.id}`);
     await client.post("/ask", { question: "How is my laptop goal going?" });
     await client.get("/reminders");
+    await client.put("/guard/policy", { blockedPayees: ["Bet9ja"] });
+    await client.post("/guard/keys", { name: "Bills bot", monthlyAllowance: 50 });
+    await client.post("/guard/check", { payee: "Netflix", amount: 17.99 });
     await client.post(`/recurring/${recurringId("netflix")}/pause`);
     await database.db.insert(budgetSuggestionDecisions).values({
       userAddress: address,
@@ -174,6 +177,8 @@ describe("data export and account deletion", () => {
       ["GET", "/budgets/suggestions"],
       ["POST", "/ask", { question: "Am I still here?" }],
       ["GET", "/ask/history"],
+      ["GET", "/guard"],
+      ["POST", "/guard/check", { payee: "Netflix", amount: 1 }],
       ["DELETE", "/me", { confirm: address }],
     ];
     for (const [method, path, json] of routes) {

@@ -254,3 +254,62 @@ export const authNonces = pgTable("auth_nonces", {
   address: text("address").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+/** Spending guard rules a user sets. One row per user; missing means the defaults in guard/policy.ts. */
+export const guardPolicies = pgTable("guard_policies", {
+  userAddress: text("user_address")
+    .primaryKey()
+    .references(() => users.address, { onDelete: "cascade" }),
+  rules: jsonb("rules").$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Scoped keys that let an AI agent ask the spending guard before it pays, like a NEAR function-call
+ * access key: it can only call the check, only within its allowance and categories, and the user can
+ * revoke it. Only the SHA-256 of the key is stored.
+ */
+export const agentKeys = pgTable(
+  "agent_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userAddress: text("user_address")
+      .notNull()
+      .references(() => users.address, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    keyHash: text("key_hash").notNull(),
+    /** First characters of the key, so the user can tell keys apart. */
+    prefix: text("prefix").notNull(),
+    monthlyAllowance: numeric("monthly_allowance", { precision: 14, scale: 2 }).notNull(),
+    maxPerPayment: numeric("max_per_payment", { precision: 14, scale: 2 }),
+    /** Category ids the agent may pay in. Empty means any category. */
+    categories: jsonb("categories").$type<string[]>().notNull().default([]),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("agent_keys_hash_unique").on(t.keyHash), index("agent_keys_user_idx").on(t.userAddress)],
+);
+
+/** Every payment the guard was asked about, and what it decided. Approved agent checks count against the allowance. */
+export const guardChecks = pgTable(
+  "guard_checks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userAddress: text("user_address")
+      .notNull()
+      .references(() => users.address, { onDelete: "cascade" }),
+    agentKeyId: uuid("agent_key_id").references(() => agentKeys.id, { onDelete: "set null" }),
+    payee: text("payee").notNull(),
+    payeeAddress: text("payee_address"),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    category: text("category"),
+    memo: text("memo"),
+    decision: text("decision", { enum: ["allow", "needs_approval", "deny"] }).notNull(),
+    risk: integer("risk").notNull(),
+    reasons: jsonb("reasons").$type<{ code: string; severity: string; message: string }[]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("guard_checks_user_created_idx").on(t.userAddress, t.createdAt), index("guard_checks_key_created_idx").on(t.agentKeyId, t.createdAt)],
+);
