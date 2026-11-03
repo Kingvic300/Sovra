@@ -17,7 +17,8 @@
     "test:build": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json",
     "test": "npm run test:build && node --enable-source-maps --test \"dist-test/**/*.spec.js\"",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "near:check": "node --env-file-if-exists=.env dist/scripts/near-check.js"
   },
   "dependencies": {
     "@mysten-incubation/memwal": "^0.1.10",
@@ -26,6 +27,9 @@
     "@nestjs/core": "^12.3.2",
     "@nestjs/jwt": "^12.0.3",
     "@nestjs/platform-express": "^12.3.2",
+    "@noble/curves": "2.0.1",
+    "@noble/hashes": "2.0.1",
+    "@phala/dcap-qvl": "0.7.0",
     "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.45.4",
     "exceljs": "4.4.0",

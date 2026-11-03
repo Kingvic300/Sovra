@@ -1,0 +1,98 @@
+/** Types and calls for the private expense auditor (backend: /api/audit). */
+
+export type CheckStatus = "pass" | "warn" | "fail" | "skipped";
+export type Check = { id: string; scope: "gateway" | "model" | "gpu" | "response"; label: string; status: CheckStatus; detail: string };
+
+export type Verification = {
+  verified: boolean;
+  model: string;
+  nonce: string;
+  attestedAt: number;
+  signingAddress: string | null;
+  checks: Check[];
+  images: string[];
+  chatId?: string;
+  requestHash?: string;
+  responseHash?: string;
+  signature?: string;
+};
+
+export type Severity = "low" | "medium" | "high";
+export type AuditRow = {
+  id: string;
+  date: string;
+  merchant: string;
+  amount: number;
+  source: string;
+  category: string;
+  kind: "statement" | "receipt";
+};
+export type AuditResult = {
+  model: string;
+  rows: AuditRow[];
+  totals: { category: string; label: string; spent: number; count: number }[];
+  moneyIn: number;
+  moneyOut: number;
+  flags: { refs: string[]; severity: Severity; title: string; reason: string }[];
+  signals: { kind: string; rowIds: string[]; severity: Severity; detail: string }[];
+  summary: string;
+  files: { name: string; kind: "statement" | "receipt"; rows: number; truncated: boolean }[];
+  verification: Verification;
+  retention: "none";
+};
+
+export type AuditFailure = { message: string; code: string; verification?: Verification };
+
+export const SAMPLE_FILES = [
+  { path: "/samples/northwind-checking-oct-2026.csv", label: "Bank statement, October (CSV)" },
+  { path: "/samples/northwind-checking-sep-2026.csv", label: "Bank statement, September (CSV)" },
+  { path: "/samples/receipt-greenleaf-grocers.txt", label: "Grocery receipt" },
+  { path: "/samples/receipt-harbor-light-cafe.txt", label: "Restaurant receipt" },
+];
+
+export async function loadSamples(): Promise<File[]> {
+  return Promise.all(
+    SAMPLE_FILES.map(async (s) => {
+      const res = await fetch(s.path);
+      const blob = await res.blob();
+      const name = s.path.split("/").pop()!;
+      return new File([blob], name, { type: name.endsWith(".csv") ? "text/csv" : "text/plain" });
+    }),
+  );
+}
+
+async function readError(res: Response): Promise<AuditFailure> {
+  const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string }; verification?: Verification } | null;
+  return {
+    code: body?.error?.code ?? "http_error",
+    message: body?.error?.message ?? (res.status === 429 ? "Too many audits from here. Wait a little and try again." : "The audit failed. Try again."),
+    verification: body?.verification,
+  };
+}
+
+/** Uploads files for one audit. Nothing is saved: the backend returns the result and forgets it. */
+export async function runAudit(files: File[]): Promise<{ ok: true; result: AuditResult } | { ok: false; error: AuditFailure }> {
+  const form = new FormData();
+  for (const f of files) form.append("files", f);
+  let res: Response;
+  try {
+    res = await fetch("/api/audit", { method: "POST", body: form, credentials: "omit", cache: "no-store" });
+  } catch {
+    return { ok: false, error: { code: "network", message: "Can't reach the auditor. Check your connection." } };
+  }
+  if (!res.ok) return { ok: false, error: await readError(res) };
+  return { ok: true, result: (await res.json()) as AuditResult };
+}
+
+export async function fetchAttestation(): Promise<{ ok: true; verification: Verification } | { ok: false; error: AuditFailure }> {
+  let res: Response;
+  try {
+    res = await fetch("/api/audit/attestation", { credentials: "omit", cache: "no-store" });
+  } catch {
+    return { ok: false, error: { code: "network", message: "Can't reach the auditor." } };
+  }
+  if (!res.ok) return { ok: false, error: await readError(res) };
+  return { ok: true, verification: (await res.json()) as Verification };
+}
+
+export const amount = (n: number) => Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
