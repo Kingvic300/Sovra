@@ -7,7 +7,8 @@ import { CsvService } from "../transactions/csv.service.js";
 import { AuditError, AuditService } from "./audit.service.js";
 
 const MAX_FILES = 6;
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
+/** Room for a phone photo of a receipt. Office files are also capped once unpacked (file-guard.ts). */
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 /**
  * Private expense auditor. Open to anyone (no account), rate-limited per IP.
@@ -32,11 +33,16 @@ export class AuditController {
     return this.audits.attest();
   }
 
-  /** multipart/form-data with up to six `files`: CSV or PDF statements, receipts as PDF or text. */
+  /**
+   * multipart/form-data with up to six `files`: statements (CSV, Excel, PDF, OFX/QFX, QIF) and
+   * receipts (PDF, Word, text, JSON or a JPG/PNG/WebP/GIF photo). Types are checked from the bytes.
+   */
   @Post()
   @RateLimit("audit")
   @Header("Cache-Control", "no-store")
-  @UseInterceptors(FilesInterceptor("files", MAX_FILES, { limits: { fileSize: MAX_FILE_BYTES } }))
+  @UseInterceptors(
+    FilesInterceptor("files", MAX_FILES, { limits: { fileSize: MAX_FILE_BYTES, files: MAX_FILES, fields: 5, parts: MAX_FILES + 5 } }),
+  )
   async audit(@UploadedFiles() files: Express.Multer.File[] | undefined, @Res({ passthrough: true }) res: Response) {
     if (!files?.length) throw badRequest("Attach at least one statement or receipt as `files`.", "file_missing");
     try {

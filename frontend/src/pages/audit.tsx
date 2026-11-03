@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { FileText, Flag, Lock, Loader2, RefreshCw, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
+import { FileText, Flag, FlaskConical, Lock, Loader2, RefreshCw, ShieldCheck, Upload, X } from "lucide-react";
 import { VerifiedPanel } from "@/components/audit/verified-panel";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
 import {
+  ACCEPT,
   amount,
   fetchAttestation,
   loadSamples,
@@ -18,7 +19,6 @@ import {
 import { useTitle } from "@/lib/use-title";
 
 const MAX_FILES = 6;
-const ACCEPT = ".csv,.pdf,.txt,text/csv,text/plain,application/pdf";
 
 const SEVERITY: Record<Severity, { label: string; className: string }> = {
   high: { label: "High", className: "bg-over-soft text-over" },
@@ -120,14 +120,17 @@ export default function AuditPage({ standalone = false }: { standalone?: boolean
               </span>
               <div>
                 <p className="font-semibold">Drop statements or receipts here</p>
-                <p className="text-[13px] text-muted">CSV or PDF statements, receipts as PDF or text. Up to {MAX_FILES} files, 2 MB each.</p>
+                <p className="max-w-[56ch] text-[13px] text-muted">
+                  Statements as CSV, Excel, PDF, OFX/QFX or QIF. Receipts as a photo (JPG, PNG, WebP), PDF, Word or text. Up to {MAX_FILES} files, 5 MB
+                  each. Every file is checked for its real type, macros and hidden instructions before it's read.
+                </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
                 <Button variant="secondary" onClick={() => input.current?.click()}>
                   Choose files
                 </Button>
                 <Button variant="quiet" onClick={() => void addSamples()}>
-                  <Sparkles className="size-4" aria-hidden />
+                  <FlaskConical className="size-4" aria-hidden />
                   Use fictional samples
                 </Button>
               </div>
@@ -239,6 +242,22 @@ export default function AuditPage({ standalone = false }: { standalone?: boolean
                 </Panel>
               )}
 
+              {result.signals.length > 0 && (
+                <Panel title="Rule-based checks">
+                  <p className="mb-3 text-[13px] text-muted">Found by code before the model saw anything. The model confirms or dismisses them above.</p>
+                  <ul className="flex flex-col gap-2">
+                    {result.signals.map((sig, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[14px]">
+                        <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${SEVERITY[sig.severity].className}`}>
+                          {SEVERITY[sig.severity].label}
+                        </span>
+                        <span>{sig.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Panel>
+              )}
+
               <Panel title="Spending by category">
                 <ul className="flex flex-col gap-3">
                   {result.totals.map((t) => (
@@ -294,8 +313,9 @@ export default function AuditPage({ standalone = false }: { standalone?: boolean
           {!result && !files.length && (
             <Panel title="No real data? Use the fictional samples">
               <p className="text-[14px] text-muted">
-                Two months of a made-up checking account and two made-up receipts, with a few problems planted in them: a double charge, a price rise, fees, an
-                overcharged receipt and more. See if the auditor finds them.
+                Two months of a made-up checking account, a credit card statement in Excel, and three made-up receipts, one of them a photo. A few problems
+                are planted in them: a double charge, a price rise, fees, an overcharged receipt, a subscription billed twice, and a receipt with hidden
+                instructions that try to talk the AI out of flagging it. See if the auditor finds them.
               </p>
               <ul className="mt-3 flex flex-col gap-1 text-[14px]">
                 {SAMPLE_FILES.map((s) => (

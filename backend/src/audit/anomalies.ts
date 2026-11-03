@@ -16,7 +16,15 @@ export type AuditRow = {
   source: string;
 };
 
-export type SignalKind = "duplicate" | "outlier" | "price_rise" | "fee" | "large_new_merchant" | "round_transfer" | "weekend_cash";
+export type SignalKind =
+  | "duplicate"
+  | "outlier"
+  | "price_rise"
+  | "fee"
+  | "large_new_merchant"
+  | "round_transfer"
+  | "weekend_cash"
+  | "prompt_injection";
 
 export type Signal = {
   kind: SignalKind;

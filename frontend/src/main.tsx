@@ -15,6 +15,7 @@ import AuditPage from '@/pages/audit'
 import AuthPage from '@/pages/auth'
 import BudgetsPage from '@/pages/budgets'
 import GoalsPage from '@/pages/goals'
+import GuardPage from '@/pages/guard'
 import FaqPage from '@/pages/marketing/faq'
 import HomePage from '@/pages/marketing/home'
 import HowItWorksPage from '@/pages/marketing/how-it-works'
@@ -66,6 +67,7 @@ const router = createBrowserRouter([
           { path: 'memory', element: <MemoryPage /> },
           { path: 'ask', element: <AskPage /> },
           { path: 'audit', element: <AuditPage /> },
+          { path: 'guard', element: <GuardPage /> },
           { path: 'profile', element: <ProfilePage /> },
         ],
       },

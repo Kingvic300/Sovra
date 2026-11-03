@@ -121,7 +121,9 @@ export class MeService {
     const { passwordHash: _passwordHash, ...account } = user;
     const data: Record<string, unknown[]> = {};
     for (const [name, { table, owner }] of Object.entries(USER_DATA_TABLES)) {
-      data[name] = await db.select().from(table).where(eq(owner, session.address));
+      const rows = (await db.select().from(table).where(eq(owner, session.address))) as Record<string, unknown>[];
+      // Agent key hashes are credentials, not the user's data: leave them out like the password hash.
+      data[name] = rows.map(({ keyHash: _keyHash, ...row }) => row);
     }
     return {
       format: "sovra-export",

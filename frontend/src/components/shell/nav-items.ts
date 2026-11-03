@@ -6,6 +6,7 @@ import {
   MessageSquareText,
   Repeat,
   ShieldCheck,
+  ShieldHalf,
   Target,
   Wallet,
   type LucideIcon,
@@ -47,6 +48,7 @@ export function navGroups(stats: ShellStats): { label: string; items: NavItem[] 
       items: [
         { href: "/app/ask", label: "Ask Sovra", icon: MessageSquareText },
         { href: "/app/audit", label: "Private audit", icon: ShieldCheck },
+        { href: "/app/guard", label: "Spending guard", icon: ShieldHalf },
         {
           href: "/app/memory",
           label: "Memory",

@@ -25,7 +25,8 @@ const SIGNATURE_RETRIES = 4;
 
 export type NearModel = { id: string; owned_by: string; supported_features?: string[]; is_ready?: boolean; name?: string };
 
-export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+export type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+export type ChatMessage = { role: "system" | "user" | "assistant"; content: string | ContentPart[] };
 export type ChatRequest = {
   model: string;
   messages: ChatMessage[];

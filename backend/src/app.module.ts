@@ -9,6 +9,7 @@ import { ConfigModule } from "./config/config.module.js";
 import { CutsModule } from "./cuts/cuts.module.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { GoalsModule } from "./goals/goals.module.js";
+import { GuardModule } from "./guard/guard.module.js";
 import { HealthController } from "./health.controller.js";
 import { MeModule } from "./me/me.module.js";
 import { MemoryModule } from "./memory/memory.module.js";
@@ -39,6 +40,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     RemindersModule,
     AskModule,
     AuditModule,
+    GuardModule,
   ],
   controllers: [HealthController],
 })

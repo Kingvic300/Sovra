@@ -6,7 +6,7 @@
  */
 import { NearCloud, NearCloudError, type Verification } from "../near/near-cloud.js";
 
-const DEFAULT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
+const DEFAULT_MODEL = "Qwen/Qwen3.8-27B";
 
 function printChecks(v: Verification) {
   const mark = { pass: "PASS", warn: "WARN", fail: "FAIL", skipped: "SKIP" } as const;
