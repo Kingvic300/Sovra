@@ -46,9 +46,26 @@ export type AuditFailure = { message: string; code: string; verification?: Verif
 export const SAMPLE_FILES = [
   { path: "/samples/northwind-checking-oct-2026.csv", label: "Bank statement, October (CSV)" },
   { path: "/samples/northwind-checking-sep-2026.csv", label: "Bank statement, September (CSV)" },
-  { path: "/samples/receipt-greenleaf-grocers.txt", label: "Grocery receipt" },
-  { path: "/samples/receipt-harbor-light-cafe.txt", label: "Restaurant receipt" },
+  { path: "/samples/brightwater-card-oct-2026.xlsx", label: "Card statement, October (Excel)" },
+  { path: "/samples/receipt-greenleaf-grocers.txt", label: "Grocery receipt (text)" },
+  { path: "/samples/receipt-harbor-light-cafe.txt", label: "Restaurant receipt (text)" },
+  { path: "/samples/receipt-pixelport-photo.jpg", label: "Online order receipt (photo)" },
 ];
+
+const TYPES: Record<string, string> = {
+  csv: "text/csv",
+  txt: "text/plain",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  jpg: "image/jpeg",
+};
+
+/** What the picker accepts. The server checks each file's real type from its bytes anyway. */
+export const ACCEPT = [
+  ".csv,.tsv,.txt,.md,.json,.pdf,.xlsx,.docx,.ofx,.qfx,.qif,.jpg,.jpeg,.png,.webp,.gif",
+  "text/*,application/pdf,application/json,image/jpeg,image/png,image/webp,image/gif",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+].join(",");
 
 export async function loadSamples(): Promise<File[]> {
   return Promise.all(
@@ -56,7 +73,7 @@ export async function loadSamples(): Promise<File[]> {
       const res = await fetch(s.path);
       const blob = await res.blob();
       const name = s.path.split("/").pop()!;
-      return new File([blob], name, { type: name.endsWith(".csv") ? "text/csv" : "text/plain" });
+      return new File([blob], name, { type: TYPES[name.split(".").pop() ?? ""] ?? blob.type });
     }),
   );
 }

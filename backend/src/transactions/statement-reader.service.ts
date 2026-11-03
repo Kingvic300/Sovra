@@ -41,6 +41,40 @@ function cellText(value: ExcelJS.CellValue): string {
 }
 
 /**
+ * Every sheet of an Excel workbook that holds a transactions table, as CSV text. Banks put a title
+ * block above the table (account name, "Date Printed", period), so the header is the first row
+ * `hasColumns` accepts as date, description and amount columns, with rows under it. One workbook
+ * often holds several accounts (wallet, savings), so every such sheet is kept.
+ */
+export async function workbookSheets(buffer: Buffer, hasColumns: (row: string[]) => boolean): Promise<StatementSheet[]> {
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  } catch {
+    throw badRequest("That Excel file couldn't be opened. Save it as .xlsx and try again.", "unreadable_file");
+  }
+  const sheets: StatementSheet[] = [];
+  for (const sheet of workbook.worksheets) {
+    const rows = worksheetRows(sheet);
+    const header = rows.findIndex((r, i) => i < rows.length - 1 && hasColumns(r));
+    if (header !== -1) sheets.push({ name: sheet.name, csv: Papa.unparse(rows.slice(header)) });
+  }
+  if (sheets.length) return sheets;
+  throw badRequest("Couldn't find a table with date, description and amount columns in that workbook.", "csv_columns_not_found");
+}
+
+/** A worksheet's non-empty rows as text cells. Formulas give their cached result, never the formula. */
+export function worksheetRows(sheet: ExcelJS.Worksheet): string[][] {
+  const rows: string[][] = [];
+  sheet.eachRow({ includeEmpty: false }, (row) => {
+    // Array.from fills the gaps exceljs leaves for empty cells, so columns stay aligned.
+    const values = Array.isArray(row.values) ? Array.from(row.values).slice(1) : [];
+    rows.push(values.map((v) => cellText(v as ExcelJS.CellValue).trim()));
+  });
+  return rows;
+}
+
+/**
  * Turns any supported statement into the CSV text CsvService parses: CSV as is, the first sheet
  * of an Excel workbook, or the transactions an AI model reads out of a PDF's text.
  */
@@ -62,32 +96,8 @@ export class StatementReaderService {
     throw badRequest("Upload a CSV, Excel (.xlsx) or PDF statement.", "unsupported_file");
   }
 
-  private async excelToSheets(buffer: Buffer) {
-    const workbook = new ExcelJS.Workbook();
-    try {
-      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
-    } catch {
-      throw badRequest("That Excel file couldn't be opened. Save it as .xlsx and try again.", "unreadable_file");
-    }
-    // Banks put a title block above the table (account name, "Date Printed", period), so the header is
-    // the first row CsvService can read as date, description and amount columns, with rows under it.
-    // Every sheet with such a table is kept: one workbook often holds several accounts (wallet, savings).
-    const sheets: StatementSheet[] = [];
-    for (const sheet of workbook.worksheets) {
-      const rows: string[][] = [];
-      sheet.eachRow({ includeEmpty: false }, (row) => {
-        // Array.from fills the gaps exceljs leaves for empty cells, so columns stay aligned.
-        const values = Array.isArray(row.values) ? Array.from(row.values).slice(1) : [];
-        rows.push(values.map((v) => cellText(v as ExcelJS.CellValue).trim()));
-      });
-      const header = rows.findIndex((r, i) => i < rows.length - 1 && this.csv.hasColumns(r));
-      if (header !== -1) sheets.push({ name: sheet.name, csv: Papa.unparse(rows.slice(header)) });
-    }
-    if (sheets.length) return sheets;
-    throw badRequest(
-      "Couldn't find a table with date, description and amount columns in that workbook.",
-      "csv_columns_not_found",
-    );
+  private excelToSheets(buffer: Buffer) {
+    return workbookSheets(buffer, (row) => this.csv.hasColumns(row));
   }
 
   private async pdfToCsv(buffer: Buffer, allowAi: boolean) {

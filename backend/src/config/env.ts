@@ -26,7 +26,7 @@ const EnvSchema = z.object({
   /** NEAR AI Cloud (cloud.near.ai) key for the private expense auditor. Secret, server only. */
   NEAR_AI_API_KEY: optional,
   /** TEE-hosted model on NEAR's own GPU fleet (owned_by "nearai" in GET /v1/models). */
-  NEAR_AI_MODEL: z.string().trim().min(1).default("Qwen/Qwen3.6-35B-A3B-FP8"),
+  NEAR_AI_MODEL: z.string().trim().min(1).default("Qwen/Qwen3.8-27B"),
   /** Private audits per hour per IP. The auditor needs no account, and each audit is a paid AI call. */
   RATE_LIMIT_AUDIT_PER_HOUR: positiveInt(20),
   /**

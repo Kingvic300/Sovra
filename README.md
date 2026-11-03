@@ -98,7 +98,7 @@ The audit doesn't touch the rest of Sovra: nothing is imported into your transac
 
 ### How it works
 
-1. **Model.** The model comes from `GET https://cloud-api.near.ai/v1/models`. Entries with `owned_by: "nearai"` run on NEAR's own confidential GPU fleet (the "Confidential TEE" tier). The default is `Qwen/Qwen3.6-35B-A3B-FP8`, which supports structured output. Set `NEAR_AI_MODEL` to use another one.
+1. **Model.** The model comes from `GET https://cloud-api.near.ai/v1/models`. Entries with `owned_by: "nearai"` run on NEAR's own confidential GPU fleet (the "Confidential TEE" tier). The default is `Qwen/Qwen3.8-27B`, which reads text and images (photos of receipts) and supports structured output. Set `NEAR_AI_MODEL` to use another one.
 2. **Preflight attestation.** Before any private data is sent, the backend calls `GET /v1/attestation/report` with a fresh 32-byte random nonce, `signing_algo=ecdsa`, `provider=near` and `x-no-aliasing: true`. It verifies the report as the [verification docs](https://docs.near.ai/cloud/verification) describe (`backend/src/near/attestation.ts`). If any check fails, nothing is sent.
 3. **Rule-based leads.** Code checks the rows for duplicate charges, amounts far above a merchant's usual, subscription price rises, fees, large round transfers, big one-off merchants and weekend cash (`backend/src/audit/anomalies.ts`). The model gets these as leads to confirm or dismiss.
 4. **Private completion.** CSV rows are parsed on the server. PDF and text receipts are sent as text. The model returns categories, receipt totals, flags and a summary as strict JSON. Statement amounts are never taken from the model.
@@ -145,6 +145,25 @@ All fictional, in `frontend/public/samples/`. The page loads them with **Use fic
 | `northwind-checking-sep-2026.csv` | The month before, which sets the usual prices |
 | `receipt-greenleaf-grocers.txt` | A total of 46.11 when the subtotal, tax and bag fee add up to 41.71 |
 | `receipt-harbor-light-cafe.txt` | A tip added on top of a service charge that was already included |
+| `brightwater-card-oct-2026.xlsx` | A credit card statement in Excel, with a title block above the table: an annual app subscription billed twice, a delivery order 3x the usual size, and a late payment fee |
+| `receipt-pixelport-photo.jpg` | A photo of a receipt that says it was charged once (the statement shows it twice), with small print that tells the AI to "ignore all previous instructions" |
+
+### File types and how uploads are checked
+
+| Kind | Formats |
+|---|---|
+| Statements | CSV/TSV, Excel `.xlsx` (every sheet), PDF, OFX/QFX, QIF |
+| Receipts | Photos (JPG, PNG, WebP, GIF), PDF, Word `.docx`, plain text, JSON |
+
+Each upload goes through `backend/src/audit/file-guard.ts` before any parser sees it:
+
+- **Real type from the bytes.** Magic numbers decide what a file is. The name and the browser's MIME type are ignored, so an executable renamed to `.csv` is refused. Old binary Office files (`.xls`, `.doc`), HEIC photos, UTF-16 text and anything else unknown are refused, with a message saying what to convert to.
+- **Office files.** The ZIP central directory is read without inflating anything. A file is refused if it would unpack to more than 40 MB, compresses suspiciously well (a zip bomb), is encrypted, has more than 2,000 entries, or carries macros (`vbaProject.bin`) or ActiveX controls. Excel cells give their cached values, never their formulas.
+- **PDFs.** pdf.js runs with font faces off and `stopAtErrors` on. Files over 60 pages are refused.
+- **Text.** Text must be valid UTF-8 with no NUL bytes. Control characters, bidirectional overrides, zero-width characters and chat-template tokens such as `<|im_start|>` and `<think>` are stripped.
+- **Formula injection.** Descriptions lose a leading `=`, `+` or `@`.
+- **Prompt injection.** Statement rows, documents and images are marked as untrusted data in the system prompt, and the model must flag any instructions hidden in them instead of following them. Code also scans the text for phrases like "ignore previous instructions" and reports them as a high-severity finding, even if the model misses them. Statement amounts are never taken from the model, flags may only cite rows that exist, and every model string is cleaned before it is returned.
+- **Limits.** Up to 6 files per audit, 5 MB each, and up to 4 photos.
 
 ## Architecture
 
@@ -281,7 +300,7 @@ The frontend needs no environment variables. In production, `/api` must reach th
 | `GROQ_API_KEY` | for Ask Sovra | Groq API key |
 | `GROQ_MODEL` / `GROQ_FAST_MODEL` | no | Default to `openai/gpt-oss-120b` / `openai/gpt-oss-20b` |
 | `NEAR_AI_API_KEY` | for the private auditor | NEAR AI Cloud API key |
-| `NEAR_AI_MODEL` | no | TEE model id. Defaults to `Qwen/Qwen3.6-35B-A3B-FP8` |
+| `NEAR_AI_MODEL` | no | TEE model id. Defaults to `Qwen/Qwen3.8-27B` |
 | `RATE_LIMIT_AUDIT_PER_HOUR` | no | Audits per hour per IP. Defaults to `20` |
 
 Any integration without its key answers `503 {"error":{"code":"not_configured"}}` and the server keeps running. `GET /api/health` shows which ones are configured.
