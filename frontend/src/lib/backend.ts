@@ -113,6 +113,9 @@ export type LiveData = {
 /** Thrown when the backend runs without a database, so there is no account data to show. */
 export class NoDatabaseError extends Error {}
 
+/** Newest transactions the app loads. Counts shown at this number mean "at least". */
+export const TRANSACTIONS_LOADED = 500;
+
 const optional = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
 
 /** Loads everything the app screens show. */
@@ -123,7 +126,7 @@ export async function loadLiveData(today: string): Promise<LiveData> {
       throw err;
     }),
     api<{ goals: ApiGoal[] }>("/goals"),
-    api<{ transactions: ApiTransaction[] }>("/transactions?limit=500"),
+    api<{ transactions: ApiTransaction[] }>(`/transactions?limit=${TRANSACTIONS_LOADED}`),
     api<{ recurring: ApiRecurring[] }>("/recurring"),
     api<{ accounts: ApiAccount[]; wallet: ApiWallet }>("/accounts"),
     // Memories and Ask history are extras: the rest of the app works without them.

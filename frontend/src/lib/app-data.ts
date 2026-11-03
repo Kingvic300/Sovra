@@ -273,7 +273,6 @@ export function walletAccount(data: AppData) {
 
 export function shellStats(data: AppData) {
   const wallet = walletAccount(data);
-  const month = data.today.slice(0, 7);
   const loading = data.source === "loading";
   if (loading) {
     // Nothing to count yet: badges stay hidden and the shell shows placeholders instead of sample numbers.
@@ -291,7 +290,9 @@ export function shellStats(data: AppData) {
   }
   return {
     loading,
-    transactions: data.transactions.filter((t) => t.date.startsWith(month)).length,
+    // Every imported transaction, not just this month's: early in a month, or with last month's
+    // statement, a this-month count reads 0 although the list is full.
+    transactions: data.transactions.length,
     budgetsOver: budgetViews(data).filter((b) => b.over).length,
     dueSoon: data.recurring.filter((r) => r.status === "active" && daysBetween(data.today, r.next) <= 3).length,
     memories: memoryCount(data),

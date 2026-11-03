@@ -19,6 +19,7 @@ import { AddGoalDialog } from "@/components/goals/add-goal-dialog";
 import { TopUpDialog } from "@/components/topup/top-up-dialog";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import type { ShellStats } from "@/lib/app-data";
+import { TRANSACTIONS_LOADED } from "@/lib/backend";
 import { Logo } from "./logo";
 import { isActive } from "./nav-items";
 
@@ -184,7 +185,7 @@ export function TabBar({ stats }: { stats: ShellStats }) {
           <ActionTile icon={Target} label="Add goal" onClick={() => openDialog("goal")} />
           <ActionTile icon={Upload} label="Import" onClick={() => go("/app/accounts")} />
         </div>
-        <SheetRow icon={ArrowLeftRight} title="Transactions" body={`${stats.transactions} this month`} onClick={() => go("/app/transactions")} />
+        <SheetRow icon={ArrowLeftRight} title="Transactions" body={stats.transactions ? `${stats.transactions >= TRANSACTIONS_LOADED ? `${TRANSACTIONS_LOADED}+` : stats.transactions} imported` : "Import a statement to see them"} onClick={() => go("/app/transactions")} />
         <SheetRow icon={Target} title="Goals" onClick={() => go("/app/goals")} />
         <SheetRow
           icon={Repeat}
