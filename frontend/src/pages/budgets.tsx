@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, Scissors } from "lucide-react";
+import { Link } from "react-router";
+import { FileUp, Plus, Scissors } from "lucide-react";
 import { AddBudgetDialog } from "@/components/budgets/add-budget-dialog";
 import { BudgetSuggestionCard } from "@/components/budgets/budget-suggestion";
 import { CutPlanDialog } from "@/components/budgets/cut-plan-dialog";
@@ -48,6 +49,25 @@ export default function BudgetsPage() {
           </div>
         }
       />
+
+      {data.transactions.length === 0 && (
+        <section className="flex flex-col gap-3 rounded-card bg-card p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-cobalt-soft text-cobalt">
+              <FileUp className="size-5" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-[15px] font-semibold">These budgets have nothing to count yet</h2>
+              <p className="mt-1 max-w-[60ch] text-muted">
+                Sovra fills each budget from your transactions and suggests limits from what you really spend. Import a bank statement and the bars, renewals and suggestions appear.
+              </p>
+            </div>
+          </div>
+          <Link to="/app/accounts" className="shrink-0 font-semibold text-cobalt hover:underline">
+            Import a statement
+          </Link>
+        </section>
+      )}
 
       <div className={`grid gap-5 ${suggestions.length ? "lg:grid-cols-[1.4fr_1fr]" : ""}`}>
         <Panel>

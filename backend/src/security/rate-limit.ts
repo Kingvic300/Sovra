@@ -6,7 +6,7 @@ import { SESSION_COOKIE, type Session } from "../auth/session.js";
 import { AppError } from "../common/errors.js";
 import { ENV, type Env } from "../config/env.js";
 
-export type RateLimitPolicy = "auth" | "demo" | "ask" | "import" | "walletSync" | "export";
+export type RateLimitPolicy = "auth" | "demo" | "ask" | "import" | "walletSync" | "export" | "audit";
 
 type Rule = { limit: number; windowMs: number; by: "ip" | "user" };
 type RuleName = RateLimitPolicy | "global" | "demoAsk";
@@ -27,6 +27,7 @@ export function rateLimitRules(env: Env): Record<RuleName, Rule> {
     import: { limit: env.RATE_LIMIT_IMPORT_PER_HOUR, windowMs: HOUR, by: "user" },
     walletSync: { limit: env.RATE_LIMIT_WALLET_SYNC_PER_HOUR, windowMs: HOUR, by: "user" },
     export: { limit: env.RATE_LIMIT_EXPORT_PER_HOUR, windowMs: HOUR, by: "user" },
+    audit: { limit: env.RATE_LIMIT_AUDIT_PER_HOUR, windowMs: HOUR, by: "ip" },
     // Every demo visitor is a new user, so per-user limits alone don't cap AI spend from demos.
     demoAsk: { limit: env.RATE_LIMIT_DEMO_ASK_PER_HOUR, windowMs: HOUR, by: "ip" },
   };

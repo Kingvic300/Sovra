@@ -32,6 +32,10 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     a: "Sovra can't recover a wallet. Restore it in your wallet app with its recovery phrase, then connect again and your memories are still there.",
   },
   {
+    q: "How does Sovra know when I've reached a goal?",
+    a: "Sovra is read-only: it never moves money, so it can't save for you. A goal's saved amount is what you enter. Once you import a bank statement, Sovra estimates how much you could put aside each month and when you'd reach each goal.",
+  },
+  {
     q: "What does Sovra remember?",
     a: (
       <>

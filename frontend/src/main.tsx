@@ -11,6 +11,7 @@ import { RootLayout } from '@/components/shell/root-layout'
 import { dAppKit } from '@/lib/dapp-kit'
 import AccountsPage from '@/pages/accounts'
 import AskPage from '@/pages/ask'
+import AuditPage from '@/pages/audit'
 import AuthPage from '@/pages/auth'
 import BudgetsPage from '@/pages/budgets'
 import GoalsPage from '@/pages/goals'
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
           { path: 'how-it-works', element: <HowItWorksPage /> },
           { path: 'security', element: <SecurityPage /> },
           { path: 'faq', element: <FaqPage /> },
+          { path: 'audit', element: <AuditPage standalone /> },
         ],
       },
       // Auth and legal
@@ -63,6 +65,7 @@ const router = createBrowserRouter([
           { path: 'accounts', element: <AccountsPage /> },
           { path: 'memory', element: <MemoryPage /> },
           { path: 'ask', element: <AskPage /> },
+          { path: 'audit', element: <AuditPage /> },
           { path: 'profile', element: <ProfilePage /> },
         ],
       },

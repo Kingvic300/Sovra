@@ -10,6 +10,7 @@ import { CONTACT_EMAIL } from "@/lib/legal";
 const NAV = [
   { to: "/how-it-works", label: "How it works" },
   { to: "/security", label: "Security" },
+  { to: "/audit", label: "Private audit" },
   { to: "/faq", label: "FAQ" },
 ];
 

@@ -12,16 +12,18 @@ export default function AskPage() {
   const upcoming = data.recurring.filter((r) => r.status === "active" && r.next >= data.today && daysBetween(data.today, r.next) <= 7);
 
   return (
-    <div className="flex flex-col gap-6">
+    // Fills the space under the top bar so only the conversation scrolls, never the page.
+    // 4rem top bar plus its 1px border; main's padding is 1.5rem + 6.5rem (tab bar) on phones and 2rem + 2rem from lg.
+    <div className="flex h-[calc(100dvh-12rem-1px-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-h-[420px] flex-col gap-6 lg:h-[calc(100dvh-8rem-1px)]">
       <PageHeader
         title="Ask Sovra"
         description="Ask anything about your money. Answers use your real numbers and what Sovra remembers about your goals."
       />
-      <div className="grid items-start gap-5 xl:grid-cols-[1fr_360px]">
+      <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[1fr_360px]">
         {/* Keyed so the thread starts again from the saved history once live data arrives. */}
         <ChatThread key={data.source} initial={data.chat} />
 
-        <aside className="flex flex-col gap-5" aria-label="What Sovra uses to answer">
+        <aside className="hidden min-h-0 flex-col gap-5 overflow-y-auto xl:flex" aria-label="What Sovra uses to answer">
           <Panel title="Sovra keeps in mind">
             <ul className="flex flex-col gap-2.5 text-[14px]">
               {[...data.memories].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5).map((m) => (

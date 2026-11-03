@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   MessageSquareText,
   Repeat,
+  ShieldCheck,
   Target,
   Wallet,
   type LucideIcon,
@@ -45,6 +46,7 @@ export function navGroups(stats: ShellStats): { label: string; items: NavItem[] 
       label: "Assistant",
       items: [
         { href: "/app/ask", label: "Ask Sovra", icon: MessageSquareText },
+        { href: "/app/audit", label: "Private audit", icon: ShieldCheck },
         {
           href: "/app/memory",
           label: "Memory",

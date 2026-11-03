@@ -23,6 +23,12 @@ const EnvSchema = z.object({
   GROQ_MODEL: z.string().trim().min(1).default("openai/gpt-oss-120b"),
   /** CSV categorization. Smaller, faster production model. */
   GROQ_FAST_MODEL: z.string().trim().min(1).default("openai/gpt-oss-20b"),
+  /** NEAR AI Cloud (cloud.near.ai) key for the private expense auditor. Secret, server only. */
+  NEAR_AI_API_KEY: optional,
+  /** TEE-hosted model on NEAR's own GPU fleet (owned_by "nearai" in GET /v1/models). */
+  NEAR_AI_MODEL: z.string().trim().min(1).default("Qwen/Qwen3.6-35B-A3B-FP8"),
+  /** Private audits per hour per IP. The auditor needs no account, and each audit is a paid AI call. */
+  RATE_LIMIT_AUDIT_PER_HOUR: positiveInt(20),
   /**
    * Express "trust proxy": how many proxies sit in front of the API ("1" behind one load balancer),
    * or "false" when clients connect directly. Client IPs, and so per-IP rate limits, depend on it.

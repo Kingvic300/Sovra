@@ -21,6 +21,7 @@
 - [Why Sovra](#why-sovra)
 - [What it does](#what-it-does)
 - [How it uses Walrus, Tatum and Sui](#how-it-uses-walrus-tatum-and-sui)
+- [Private expense auditor (NEAR AI Cloud, TEE)](#private-expense-auditor-near-ai-cloud-tee)
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
 - [Repository layout](#repository-layout)
@@ -48,7 +49,7 @@ Sovra keeps that context. Every goal, limit, category correction and decision be
 | **Overview** | Total balance across bank accounts and USDC on Sui, a 30-day trend, what Sovra remembers, live budget status and a goal tracker |
 | **Transactions** | Imported transactions with search and filters. Change a category and Sovra asks "Always file Amazon under business supplies?" and learns the rule |
 | **Budgets** | Monthly limits that count scheduled renewals as hatched segments before they hit, plus suggestions based on your history. When a budget is heading over, **What should I cut?** has the AI pick which renewals to pause and which habits to skip, with the saving for each, and it leaves alone anything you told Sovra matters to you |
-| **Goals** | Savings goals with progress, weekly amounts and target dates |
+| **Goals** | Savings goals with progress, weekly amounts and target dates. Once a statement is imported, Sovra works out what you really keep each month and says whether each goal is on track, and when you'd reach it |
 | **Recurring** | Bills and subscriptions found in your transactions, with reminders and Pause/Resume. Pausing really frees the money in your budgets |
 | **Memory** | Every memory Sovra keeps, in plain words with the key phrase highlighted. Filter by type and forget anything, with Undo |
 | **Ask Sovra** | Plain-language questions answered from your numbers and memories, showing which memories the answer used |
@@ -78,6 +79,72 @@ Users connect any Sui wallet through `@mysten/dapp-kit-react`: browser extension
 ### Groq: answers and categorization
 
 Ask Sovra and CSV categorization run on Groq's OpenAI-compatible API. By default `openai/gpt-oss-120b` writes answers and `openai/gpt-oss-20b` categorizes merchants with strict JSON output. Answers are grounded in the user's own budgets, goals, transactions, bills and recalled memories, and the prompt forbids investment, tax or legal advice.
+
+## Private expense auditor (NEAR AI Cloud, TEE)
+
+Built for the Privacy & Private AI track. Open **`/audit`** (no account needed; also in the app sidebar as **Private audit**), drop in receipts or a bank statement, and a model running inside a trusted execution environment (TEE) on [NEAR AI Cloud](https://docs.near.ai/cloud/) sorts the spending into categories and flags anything unusual. A **Verified** panel lists every check that proved the analysis ran inside the TEE.
+
+### Nothing is kept server-side
+
+The auditor stores nothing once a response returns:
+
+- `backend/src/audit/` has no database, cache, queue or file system access, and it never reads a session cookie.
+- Uploads stay in memory (multer memory storage). The controller overwrites the upload buffers with zeros in a `finally` block before the handler returns.
+- Nothing logs file contents, merchants, amounts or model output.
+- Responses carry `Cache-Control: no-store`, and the browser sends uploads with `credentials: "omit"`.
+- The only trace left is the per-IP request counter the rate limiter keeps in memory. It holds no content and expires within the hour. The Intel collateral cache holds public, Intel-signed platform data, never user data.
+
+The audit doesn't touch the rest of Sovra: nothing is imported into your transactions or written to Walrus Memory.
+
+### How it works
+
+1. **Model.** The model comes from `GET https://cloud-api.near.ai/v1/models`. Entries with `owned_by: "nearai"` run on NEAR's own confidential GPU fleet (the "Confidential TEE" tier). The default is `Qwen/Qwen3.6-35B-A3B-FP8`, which supports structured output. Set `NEAR_AI_MODEL` to use another one.
+2. **Preflight attestation.** Before any private data is sent, the backend calls `GET /v1/attestation/report` with a fresh 32-byte random nonce, `signing_algo=ecdsa`, `provider=near` and `x-no-aliasing: true`. It verifies the report as the [verification docs](https://docs.near.ai/cloud/verification) describe (`backend/src/near/attestation.ts`). If any check fails, nothing is sent.
+3. **Rule-based leads.** Code checks the rows for duplicate charges, amounts far above a merchant's usual, subscription price rises, fees, large round transfers, big one-off merchants and weekend cash (`backend/src/audit/anomalies.ts`). The model gets these as leads to confirm or dismiss.
+4. **Private completion.** CSV rows are parsed on the server. PDF and text receipts are sent as text. The model returns categories, receipt totals, flags and a summary as strict JSON. Statement amounts are never taken from the model.
+5. **Signed answer.** The backend hashes the exact request and response bytes with SHA-256, then fetches `GET /v1/signature/{id}`. It checks that the signed text is `<model>:<request hash>:<response hash>`, recovers the EIP-191 ECDSA signer, and checks that the signer is the key the model TEE attested.
+
+### What the Verified panel checks
+
+| Scope | Check |
+|---|---|
+| Gateway and model (Intel TDX) | The report echoes our nonce |
+| | The TDX quote verifies with [dcap-qvl](https://github.com/Phala-Network/dcap-qvl) against Intel's root CA, and the TCB status is `UpToDate` |
+| | The TD isn't in debug mode |
+| | `report_data[0:32]` is the signing address and `report_data[32:64]` is our nonce, both read from the verified quote |
+| | `MRCONFIGID` = `0x01` ‖ SHA-256(`app_compose`) ‖ 15 zero bytes |
+| | Replaying the event log reproduces `RTMR3` |
+| GPU (NVIDIA) | `nvidia_payload` carries our nonce |
+| | NVIDIA NRAS returns `x-nvidia-overall-att-result: true` |
+| Response | The signature covers SHA-256 of our exact request and response |
+| | The ECDSA signature recovers to the signing address |
+| | That address is the attested model key |
+
+**Show evidence** lists the nonce, signing key, hashes, completion id and the container image digests pinned in the attested compose file.
+
+Not checked yet: build provenance (Sigstore) for those image digests, and TLS certificate binding. TLS binding needs the peer certificate from the same connection, which the backend doesn't capture. The panel says so.
+
+### Run it
+
+```bash
+# backend/.env
+NEAR_AI_API_KEY=...          # from cloud.near.ai; the account needs credits for completions
+
+npm --prefix backend run build
+npm --prefix backend run near:check   # one completion plus full verification, printed check by check
+npm run dev:backend && npm run dev:frontend   # then open http://localhost:5173/audit
+```
+
+### Sample documents
+
+All fictional, in `frontend/public/samples/`. The page loads them with **Use fictional samples**.
+
+| File | What's planted in it |
+|---|---|
+| `northwind-checking-oct-2026.csv` | A double charge (Pixelport, 129.99 twice on one day), a ride 4x the usual price, a streaming price rise, maintenance, overdraft and foreign transaction fees, a round 1,000 transfer, and Sunday cash withdrawals |
+| `northwind-checking-sep-2026.csv` | The month before, which sets the usual prices |
+| `receipt-greenleaf-grocers.txt` | A total of 46.11 when the subtotal, tax and bag fee add up to 41.71 |
+| `receipt-harbor-light-cafe.txt` | A tip added on top of a service charge that was already included |
 
 ## Architecture
 
@@ -213,6 +280,9 @@ The frontend needs no environment variables. In production, `/api` must reach th
 | `MEMWAL_SERVER_URL` | no | Defaults to the mainnet relayer |
 | `GROQ_API_KEY` | for Ask Sovra | Groq API key |
 | `GROQ_MODEL` / `GROQ_FAST_MODEL` | no | Default to `openai/gpt-oss-120b` / `openai/gpt-oss-20b` |
+| `NEAR_AI_API_KEY` | for the private auditor | NEAR AI Cloud API key |
+| `NEAR_AI_MODEL` | no | TEE model id. Defaults to `Qwen/Qwen3.6-35B-A3B-FP8` |
+| `RATE_LIMIT_AUDIT_PER_HOUR` | no | Audits per hour per IP. Defaults to `20` |
 
 Any integration without its key answers `503 {"error":{"code":"not_configured"}}` and the server keeps running. `GET /api/health` shows which ones are configured.
 
@@ -231,6 +301,7 @@ Any integration without its key answers `503 {"error":{"code":"not_configured"}}
 | `/app/accounts` | Sui wallet, top-up, CSV import |
 | `/app/memory` | What Sovra remembers |
 | `/app/ask` | Ask Sovra |
+| `/audit`, `/app/audit` | Private expense auditor (TEE on NEAR AI Cloud) |
 | `/terms`, `/privacy` | Legal |
 | anything else | 404 |
 
@@ -252,6 +323,7 @@ All routes are under `/api` and return errors as `{ "error": { "code", "message"
 | Goals | `GET /goals`, `POST /goals`, `PATCH /goals/:id`, `DELETE /goals/:id` |
 | Recurring | `GET /recurring` |
 | Ask | `POST /ask` |
+| Private audit (no session) | `GET /audit/status`, `GET /audit/attestation`, `POST /audit` (multipart `files`) |
 
 ## Design system
 

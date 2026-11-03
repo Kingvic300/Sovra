@@ -19,6 +19,9 @@ const RECENT_TRANSACTIONS = 15;
 const UPCOMING_DAYS = 30;
 /** Merchants listed with their month's total, so "what can I cut?" has more than the latest few rows. */
 const TOP_MERCHANTS = 12;
+/** Enough rows for about three months of a busy account. */
+const CASHFLOW_ROWS = 2000;
+const CASHFLOW_MONTHS = 3;
 
 @Injectable()
 export class AskService {
@@ -64,7 +67,7 @@ export class AskService {
 
     const db = this.database.available;
     const hasWallet = this.tatum.configured && session.method !== "email";
-    const [memories, profile, budgets, goals, recent, monthSpending, upcoming, balances, walletOnly] = await Promise.all([
+    const [memories, profile, budgets, goals, recent, monthSpending, upcoming, balances, walletOnly, history] = await Promise.all([
       attempt("memories", await this.memory.availableFor(session.address), () =>
         this.memory.recall(session.address, question, MEMORY_LIMIT),
       ),
@@ -87,6 +90,8 @@ export class AskService {
       // Without a database there is no summary, so the wallet is read on its own.
       // Email accounts have no wallet; their address is only an id.
       db ? undefined : attempt("Sui wallet balance", hasWallet, () => this.tatum.getUsdcBalance(session.address)),
+      // Income and spending per month, so "how much do I save?" comes from the statement, not a guess.
+      attempt("monthly cash flow", db, () => this.transactions.list(session.address, { limit: CASHFLOW_ROWS })),
     ]);
     const wallet = balances ? balances.wallet : walletOnly ? { usdc: walletOnly.usdc } : undefined;
     if (db && session.method !== "email" && !wallet) missing.push("Sui wallet balance");
@@ -95,7 +100,7 @@ export class AskService {
     const currency = await this.currencies.forUser(session.address);
     context.currency = currency;
     const accountCurrency = new Map<string, string>();
-    if ((recent || monthSpending) && db) {
+    if ((recent || monthSpending || history) && db) {
       const rows = await this.database.db
         .select({ id: accounts.id, currency: accounts.currency })
         .from(accounts)
@@ -129,6 +134,14 @@ export class AskService {
         amount,
         currency: accountCurrency.get(accountId ?? "") ?? currency,
       }));
+    }
+    if (history) {
+      const flow = monthlyCashflow(history, accountCurrency, currency, month);
+      context.hasImportedStatement = history.length > 0;
+      if (flow.length) {
+        context.monthlyCashflow = flow;
+        context.averageMonthlySavings = round2(flow.reduce((s, f) => s + f.net, 0) / flow.length);
+      }
     }
     if (upcoming) {
       context.upcomingBills = upcoming.map(({ merchant, amount, nextDate, cadence }) => ({ merchant, amount, nextDate, cadence }));
@@ -239,4 +252,32 @@ function topMerchants(
     totals.set(key, t);
   }
   return [...totals.values()].sort((a, b) => b.spent - a.spent).slice(0, TOP_MERCHANTS);
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Money in, money out and what was left for the last full months (up to three), in the user's
+ * currency. Rows from accounts in another currency are left out rather than mixed in unconverted.
+ * Falls back to the current month when it's the only one with data.
+ */
+export function monthlyCashflow(
+  rows: { date: string; amount: number; accountId: string | null }[],
+  accountCurrency: Map<string, string>,
+  currency: string,
+  thisMonth: string,
+) {
+  const byMonth = new Map<string, { month: string; income: number; spent: number; net: number; partial?: boolean }>();
+  for (const r of rows) {
+    if ((accountCurrency.get(r.accountId ?? "") ?? currency) !== currency) continue;
+    const month = r.date.slice(0, 7);
+    const f = byMonth.get(month) ?? { month, income: 0, spent: 0, net: 0 };
+    if (r.amount >= 0) f.income += r.amount;
+    else f.spent += -r.amount;
+    byMonth.set(month, f);
+  }
+  const all = [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
+  const full = all.filter((f) => f.month < thisMonth);
+  const picked = full.length ? full.slice(-CASHFLOW_MONTHS) : all.filter((f) => f.month === thisMonth).map((f) => ({ ...f, partial: true }));
+  return picked.map((f) => ({ ...f, income: round2(f.income), spent: round2(f.spent), net: round2(f.income - f.spent) }));
 }

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AccountsModule } from "./accounts/accounts.module.js";
 import { AiModule } from "./ai/ai.module.js";
 import { AskModule } from "./ask/ask.module.js";
+import { AuditModule } from "./audit/audit.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { BudgetsModule } from "./budgets/budgets.module.js";
 import { ConfigModule } from "./config/config.module.js";
@@ -37,6 +38,7 @@ import { WalletModule } from "./wallet/wallet.module.js";
     RecurringModule,
     RemindersModule,
     AskModule,
+    AuditModule,
   ],
   controllers: [HealthController],
 })
