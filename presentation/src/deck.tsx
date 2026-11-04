@@ -1,7 +1,8 @@
-import { ChevronLeft, ChevronRight, Expand, LayoutGrid, Minimize, RotateCw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Expand, LayoutGrid, Minimize, Presentation, RotateCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { SLIDES } from "./slides";
-import { cx, Logo } from "./ui";
+import { openChannel } from "./sync";
+import { cx, Logo, SCREENS } from "./ui";
 
 const W = 1600;
 const H = 900;
@@ -22,7 +23,7 @@ function useViewport() {
 }
 
 /** A 1600×900 canvas scaled to fit `scale`. */
-function Canvas({ scale, children, className }: { scale: number; children: ReactNode; className?: string }) {
+export function Canvas({ scale, children, className }: { scale: number; children: ReactNode; className?: string }) {
   return (
     <div style={{ width: W * scale, height: H * scale }} className={cx("relative overflow-hidden", className)}>
       <div style={{ width: W, height: H, transform: `scale(${scale})`, transformOrigin: "top left" }} className="absolute top-0 left-0">
@@ -52,12 +53,40 @@ export function Deck() {
     });
   }, []);
 
+  // Warm the cache with every screenshot so slides never pop in half-loaded.
+  useEffect(() => {
+    for (const name of SCREENS) {
+      const img = new Image();
+      img.src = `/screens/${name}.webp`;
+    }
+  }, []);
+
   // Keep the URL in step so a refresh or a shared link opens the same slide.
   useEffect(() => {
     const target = `#${index + 1}`;
     if (window.location.hash !== target) history.replaceState(null, "", target);
     document.title = `${SLIDES[index].title} · Sovra Presentation`;
   }, [index]);
+
+  // Presenter window sync: tell it where we are, and follow its ← →.
+  const channel = useRef<ReturnType<typeof openChannel> | null>(null);
+  const indexRef = useRef(index);
+  indexRef.current = index;
+  useEffect(() => {
+    const ch = openChannel((m) => {
+      if (m.type === "go") go(m.index);
+      else if (m.type === "hello") ch.post({ type: "index", index: indexRef.current });
+    });
+    channel.current = ch;
+    return () => ch.close();
+  }, [go]);
+  useEffect(() => {
+    channel.current?.post({ type: "index", index });
+  }, [index]);
+
+  const openPresenter = useCallback(() => {
+    window.open(`${window.location.pathname}?presenter`, "sovra-presenter", "width=1280,height=800");
+  }, []);
 
   useEffect(() => {
     const onHash = () => go(readHash());
@@ -106,12 +135,13 @@ export function Deck() {
       else if (e.key === "End") go(SLIDES.length - 1);
       else if (e.key === "g" || e.key === "Escape") openOverview();
       else if (e.key === "f") toggleFullscreen();
+      else if (e.key === "p") openPresenter();
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [overview, pick, index, go, openOverview, toggleFullscreen]);
+  }, [overview, pick, index, go, openOverview, toggleFullscreen, openPresenter]);
 
   // Hide the controls when the mouse rests, so the stage stays clean while presenting.
   useEffect(() => {
@@ -183,6 +213,9 @@ export function Deck() {
         <span className="mx-1 h-5 w-px bg-white/15" />
         <CtrlButton label="All slides (G)" onClick={openOverview}>
           <LayoutGrid className="size-[17px]" />
+        </CtrlButton>
+        <CtrlButton label="Presenter view with notes (P)" onClick={openPresenter}>
+          <Presentation className="size-[17px]" />
         </CtrlButton>
         <CtrlButton label={fullscreen ? "Exit full screen (F)" : "Full screen (F)"} onClick={toggleFullscreen}>
           {fullscreen ? <Minimize className="size-[17px]" /> : <Expand className="size-[17px]" />}
