@@ -103,3 +103,89 @@ export function Bar({ value, max, tone = "cobalt", pending = 0, className }: { v
 
 export const money = (n: number, cents = true) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
+
+/** Every app screenshot in /public/screens, captured from the real app (demo account, 1440×900 at 2×). */
+export const SCREENS = [
+  "home",
+  "signin",
+  "onboarding-1",
+  "onboarding-2",
+  "onboarding-3",
+  "onboarding-4",
+  "overview",
+  "overview-lower",
+  "transactions-learn",
+  "budgets",
+  "goals",
+  "recurring",
+  "accounts",
+  "memory",
+  "ask",
+  "audit",
+  "guard",
+] as const;
+export type ScreenName = (typeof SCREENS)[number];
+
+/**
+ * A real app screenshot in a browser frame.
+ * `focus` zooms into part of the page: [scale, x%, y%], where x/y is the point that stays in view.
+ */
+export function Shot({
+  name,
+  url,
+  className,
+  style,
+  focus,
+  chrome = true,
+  dark = false,
+}: {
+  name: ScreenName;
+  url?: string;
+  className?: string;
+  style?: CSSProperties;
+  focus?: [number, number, number];
+  chrome?: boolean;
+  dark?: boolean;
+}) {
+  const [scale, x, y] = focus ?? [1, 0, 0];
+  return (
+    <div
+      className={cx("flex flex-col overflow-hidden rounded-[16px] shadow-pop ring-1", dark ? "bg-ink-2 ring-white/15" : "bg-card ring-black/10", className)}
+      style={style}
+    >
+      {chrome && (
+        <div className={cx("flex h-9 shrink-0 items-center gap-3 border-b px-4", dark ? "border-white/10 bg-ink-2" : "border-line bg-[#f6f8fb]")}>
+          <span className="flex gap-1.5">
+            <span className="size-2.5 rounded-full bg-[#ff5f57]" />
+            <span className="size-2.5 rounded-full bg-[#febc2e]" />
+            <span className="size-2.5 rounded-full bg-[#28c840]" />
+          </span>
+          <span className={cx("mx-auto flex h-6 min-w-[40%] items-center justify-center rounded-md px-3 text-[12px]", dark ? "bg-white/8 text-white/55" : "bg-white text-muted ring-1 ring-line")}>
+            sovra.vercel.app{url ?? ""}
+          </span>
+          <span className="w-[46px]" />
+        </div>
+      )}
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <img
+          src={`/screens/${name}.webp`}
+          alt=""
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover object-left-top"
+          style={scale !== 1 ? { transform: `scale(${scale})`, transformOrigin: `${x}% ${y}%` } : undefined}
+        />
+      </div>
+    </div>
+  );
+}
+
+export type CropName = "crop-overview-alert" | "crop-tx-prompt" | "crop-accounts-wallet" | "crop-ask-answer" | "crop-onboarding-panel" | "crop-budgets-ent";
+
+/** A close-up cut from a real screenshot, shown as a floating card. */
+export function Crop({ name, className, style }: { name: CropName; className?: string; style?: CSSProperties }) {
+  return (
+    <div className={cx("overflow-hidden rounded-[14px] bg-card shadow-[0_30px_70px_-20px_rgb(15_27_51/0.55)] ring-1 ring-black/10", className)} style={style}>
+      <img src={`/screens/${name}.webp`} alt="" draggable={false} className="block h-auto w-full" />
+    </div>
+  );
+}

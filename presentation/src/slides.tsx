@@ -19,14 +19,15 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
-import { AskScreen, AuditScreen, BudgetsScreen, MemoryScreen, OnboardingScreen, OverviewScreen, TransactionsScreen } from "./demo-screens";
-import { Bar, Card, Chip, cx, d, Kicker, Logo, MemoryText, money, Remembered, Wordmark } from "./ui";
+import { Bar, Card, Chip, Crop, cx, d, Kicker, Logo, money, Remembered, Shot, Wordmark, type ScreenName } from "./ui";
 
 export const APP_URL = "https://sovra.vercel.app";
 export const REPO_URL = "https://github.com/Kingvic300/Sovra";
 
 export type SlideProps = { active: boolean };
-export type SlideDef = { id: string; title: string; tone: "light" | "dark"; Component: ComponentType<SlideProps> };
+/** Speaker notes: the slot in the 3-minute pitch and the script for it. */
+export type Notes = { time?: string; script: string };
+export type SlideDef = { id: string; title: string; tone: "light" | "dark"; Component: ComponentType<SlideProps>; notes?: Notes; appendix?: boolean };
 
 function Frame({ tone = "light", children, className }: { tone?: "light" | "dark"; children: ReactNode; className?: string }) {
   return (
@@ -84,13 +85,15 @@ function TitleSlide() {
             your goals.
           </h1>
           <p className="rise mt-8 max-w-[600px] text-[24px] leading-[1.45] text-muted" style={d(260)}>
-            Sovra learns your goals, limits and decisions, keeps them in a memory vault on Walrus, and uses them every time you check a budget or ask a
-            question.
+            A personal finance platform built on one simple idea: your financial app should remember you.
           </p>
           <div className="rise mt-9 flex gap-3" style={d(360)}>
             <Chip tone="cobalt" className="px-4 py-1.5 text-[16px]">Total Recall hackathon</Chip>
-            <Chip className="px-4 py-1.5 text-[16px]">Track 03 · Consumer Finance</Chip>
+            <Chip className="px-4 py-1.5 text-[16px]">Consumer Finance Apps</Chip>
           </div>
+          <p className="rise mt-8 text-[18px] text-muted" style={d(440)}>
+            Built by <b className="text-ink">Victor</b> and <b className="text-ink">Ladipo</b>
+          </p>
         </div>
         <HeroVisual />
       </div>
@@ -99,40 +102,16 @@ function TitleSlide() {
 }
 
 function HeroVisual() {
-  const items = [
-    { text: "You're saving for a laptop, $1,200 by January.", highlight: "laptop, $1,200 by January" },
-    { text: "Keep entertainment under $100 a month.", highlight: "under $100 a month" },
-    { text: "You're paid on the 25th.", highlight: "paid on the 25th" },
-  ];
   return (
-    <div className="relative">
-      <Card className="pop relative z-10 w-[86%] p-7" style={d(300)}>
-        <p className="flex items-center gap-2 text-[16px] font-semibold text-muted">
-          <Brain className="size-5 text-cobalt" /> What Sovra remembers
-        </p>
-        <div className="mt-4 space-y-3">
-          {items.map((m, i) => (
-            <p key={m.text} className="rise rounded-xl bg-porcelain px-4 py-3 text-[19px]" style={d(450 + i * 120)}>
-              <MemoryText {...m} />
-            </p>
-          ))}
-        </div>
-      </Card>
-      <div className="pop relative z-20 -mt-8 ml-auto w-[84%] rounded-card bg-card p-6 shadow-pop ring-1 ring-line" style={d(800)}>
-        <p className="ml-auto w-fit rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-[18px] text-white">Can I afford a $300 phone this month?</p>
-        <div className="mt-4 flex gap-3">
-          <Logo className="size-9 shrink-0" />
-          <p className="text-[18px] leading-relaxed">
-            Not without slowing your laptop fund. You have about $612 free until you're paid on the 25th. Wait until after payday and both fit.
-          </p>
-        </div>
-      </div>
-      <div className="pop relative z-30 -mt-5 ml-[4%] flex w-fit items-center gap-3 rounded-full bg-card py-2.5 pr-5 pl-2.5 shadow-pop ring-1 ring-line" style={d(1000)}>
+    <div className="relative h-[640px]">
+      <Shot name="memory" url="/app/memory" className="pop absolute top-0 right-[-40px] h-[440px] w-[700px] rotate-[3deg]" style={d(250)} />
+      <Shot name="overview" url="/app" className="pop absolute top-[150px] left-[-10px] h-[460px] w-[720px] -rotate-[1.5deg]" style={d(450)} />
+      <div className="pop absolute right-[10px] bottom-[-6px] z-10 flex items-center gap-3 rounded-full bg-card py-2.5 pr-5 pl-2.5 shadow-pop ring-1 ring-line" style={d(900)}>
         <span className="grid size-9 place-items-center rounded-full bg-cobalt-soft text-cobalt">
           <Wallet className="size-[18px]" />
         </span>
         <span className="text-[17px]">
-          <b className="tabular-nums">$1,032.40 USDC</b> <span className="text-muted">live via Tatum</span>
+          <b className="tabular-nums">14 memories</b> <span className="text-muted">on Walrus · USDC live via Tatum</span>
         </span>
       </div>
     </div>
@@ -153,7 +132,8 @@ function ProblemSlide() {
             have amnesia.
           </H>
           <Lead className="text-white/65">
-            You set a budget, explain a big month, fix the same merchant again. Next login, the app starts from zero, and the advice never gets personal.
+            You set a budget, correct a transaction, explain your habits, set goals. When you come back, a lot of that context is gone, so you repeat the
+            same instructions and fix the same mistakes.
           </Lead>
         </div>
         <div className="grid grid-cols-2 gap-5">
@@ -183,7 +163,7 @@ function ProblemSlide() {
             </div>
           ))}
           <p className="rise col-span-2 text-center text-[20px] text-white/55" style={d(1300)}>
-            Same budget alert. Same correction. Same generic tip.
+            Same instructions. Same corrections. Same generic advice.
           </p>
         </div>
       </div>
@@ -193,13 +173,6 @@ function ProblemSlide() {
 
 /* 3 ─ Solution */
 function SolutionSlide() {
-  const memories = [
-    { kind: "Goal", text: "You're saving for a laptop, $1,200 by January.", highlight: "laptop, $1,200 by January" },
-    { kind: "Limit", text: "Keep entertainment under $100 a month.", highlight: "under $100 a month" },
-    { kind: "Correction", text: "Amazon orders are business supplies, not shopping.", highlight: "business supplies" },
-    { kind: "Preference", text: "Bolt rides after 10 pm are for safety, not a budget leak.", highlight: "for safety" },
-    { kind: "Decision", text: "You kept Spotify and paused Disney+ in October.", highlight: "paused Disney+" },
-  ];
   return (
     <Frame>
       <div className="grid h-full grid-cols-[1fr_1.05fr] items-center gap-20">
@@ -218,27 +191,12 @@ function SolutionSlide() {
             Advice gets more personal every week, instead of resetting every login.
           </p>
         </div>
-        <Card className="pop p-7" style={d(200)}>
-          <div className="flex items-center justify-between">
-            <p className="flex items-center gap-2 text-[18px] font-semibold">
-              <Brain className="size-5 text-cobalt" /> Your memory vault
-            </p>
-            <Chip tone="gain">
-              <span className="size-2 rounded-full bg-gain" /> Walrus mainnet
-            </Chip>
-          </div>
-          <div className="mt-5 space-y-3">
-            {memories.map((m, i) => (
-              <div key={m.text} className="rise flex items-center gap-4 rounded-xl bg-porcelain px-4 py-3.5" style={d(350 + i * 110)}>
-                <span className="w-[112px] shrink-0 text-[13px] font-semibold tracking-[0.08em] text-muted uppercase">{m.kind}</span>
-                <p className="text-[18px]">
-                  <MemoryText text={m.text} highlight={m.highlight} />
-                </p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-5 font-mono text-[14px] text-muted">namespace · sovra-0x7b3e…2f9a</p>
-        </Card>
+        <div className="relative">
+          <Shot name="home" className="pop h-[560px] w-full" style={d(200)} />
+          <p className="rise mt-4 text-center text-[15px] text-muted" style={d(500)}>
+            The live Sovra landing page
+          </p>
+        </div>
       </div>
     </Frame>
   );
@@ -480,14 +438,15 @@ function TrustSlide() {
 }
 
 /* 8 ─ Live demo */
-const DEMO = [
-  { title: "Onboarding", body: "Four short steps, with a live panel of what Sovra will remember.", Screen: OnboardingScreen },
-  { title: "Overview", body: "Bank CSV plus USDC on Sui, read live through Tatum.", Screen: OverviewScreen },
-  { title: "Learn from an edit", body: "Change one category, and Sovra offers to remember the rule.", Screen: TransactionsScreen },
-  { title: "Budgets that look ahead", body: "Renewals count before they land. What should I cut?", Screen: BudgetsScreen },
-  { title: "Ask Sovra", body: "Answers from your numbers, with the memories they used.", Screen: AskScreen },
-  { title: "Memory page", body: "Everything in plain words. Filter, forget, undo.", Screen: MemoryScreen },
-  { title: "Private audit", body: "Duplicate charges and fees found inside a verified TEE.", Screen: AuditScreen },
+const DEMO: { title: string; body: string; shot: ScreenName; url: string }[] = [
+  { title: "Sign in", body: "Any Sui wallet, or Slush on the web. One signed message, no transaction.", shot: "signin", url: "/signin" },
+  { title: "Onboarding", body: "Four short steps, with a live panel of what Sovra will remember.", shot: "onboarding-3", url: "/onboarding" },
+  { title: "Overview", body: "Bank statements plus USDC on Sui, read live through Tatum.", shot: "overview", url: "/app" },
+  { title: "Learn from an edit", body: "Change one category, and Sovra offers to remember the rule.", shot: "transactions-learn", url: "/app/transactions" },
+  { title: "Budgets that look ahead", body: "Renewals count before they land, shown hatched.", shot: "budgets", url: "/app/budgets" },
+  { title: "Ask Sovra", body: "Answers from your numbers, with the memories they used.", shot: "ask", url: "/app/ask" },
+  { title: "Memory page", body: "Everything in plain words. Filter, forget, undo.", shot: "memory", url: "/app/memory" },
+  { title: "Private audit", body: "Duplicate charges and fees found inside a verified TEE.", shot: "audit", url: "/app/audit" },
 ];
 
 function DemoSlide({ active }: SlideProps) {
@@ -506,7 +465,7 @@ function DemoSlide({ active }: SlideProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [active]);
-  const Screen = DEMO[step].Screen;
+  const current = DEMO[step];
   return (
     <Frame className="pt-[80px]">
       <div className="flex items-end justify-between">
@@ -560,9 +519,9 @@ function DemoSlide({ active }: SlideProps) {
         </div>
         <div className="relative h-[560px]">
           <div key={step} className="h-full" style={{ animation: "fade-in 0.35s ease both" }}>
-            <Screen />
+            <Shot name={current.shot} url={current.url} className="h-full w-full" />
           </div>
-          <span className="absolute -top-3 right-5 rounded-full bg-ink px-3 py-1 text-[12.5px] font-semibold text-white">Sample data · Ada's account</span>
+          <span className="absolute -top-3 right-5 rounded-full bg-ink px-3 py-1 text-[12.5px] font-semibold text-white">Demo account · real app</span>
         </div>
       </div>
     </Frame>
@@ -634,25 +593,6 @@ function StatusSlide() {
   );
 }
 
-/* 10 ─ Vision */
-function VisionSlide() {
-  return (
-    <Frame tone="dark" className="flex flex-col justify-center">
-      <div className="pointer-events-none absolute -bottom-60 -left-40 size-[800px] rounded-full bg-cobalt/30 blur-3xl" />
-      <div className="relative">
-        <Kicker tone="dark">The vision</Kicker>
-        <h2 className="rise mt-8 max-w-[1250px] text-[96px] leading-[1.0] font-bold tracking-[-0.04em]" style={d(100)}>
-          Money advice that knows you, and <Remembered draw>stays yours</Remembered>.
-        </h2>
-        <p className="rise mt-10 max-w-[900px] text-[26px] leading-[1.45] text-white/65" style={d(300)}>
-          Your context lives in your own namespace on Walrus, not locked in one app's database. Every goal you set and every choice you make makes the next
-          answer better.
-        </p>
-      </div>
-    </Frame>
-  );
-}
-
 function GithubMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
@@ -668,13 +608,13 @@ function CloseSlide() {
       <div className="pop" style={d(0)}>
         <Logo className="size-24" />
       </div>
-      <h2 className="rise mt-10 text-[88px] leading-[1.0] font-bold tracking-[-0.04em]" style={d(120)}>
-        Tell it once.
+      <h2 className="rise mt-10 max-w-[1250px] text-[80px] leading-[1.04] font-bold tracking-[-0.04em]" style={d(120)}>
+        Not just where your money goes.
         <br />
-        Sovra <Remembered draw>remembers</Remembered>.
+        <Remembered draw>What you're working toward.</Remembered>
       </h2>
       <p className="rise mt-8 text-[24px] text-muted" style={d(260)}>
-        Try it with a Sui wallet, or explore with a demo account. No install, no bank password.
+        Persistent memory through Walrus. Onchain financial data through Tatum. Try it with a Sui wallet or a demo account.
       </p>
       <div className="rise mt-12 flex gap-4" style={d(380)}>
         <a href={APP_URL} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl bg-cobalt px-7 py-4 text-[20px] font-semibold text-white shadow-pop hover:bg-cobalt-deep">
@@ -685,22 +625,315 @@ function CloseSlide() {
         </a>
       </div>
       <p className="rise mt-14 flex items-center gap-2 text-[17px] text-muted" style={d(500)}>
-        <BadgeCheck className="size-5 text-cobalt" /> Walrus Memory · Tatum · Sui · NEAR AI Cloud · Groq
+        <BadgeCheck className="size-5 text-cobalt" /> Thank you · Victor and Ladipo, the team behind Sovra
       </p>
     </Frame>
   );
 }
 
+
+/* ── Slides that follow the 3-minute pitch, built from real app screenshots ── */
+
+function Points({ items, tone = "light" }: { items: string[]; tone?: "light" | "dark" }) {
+  return (
+    <ul className="space-y-3">
+      {items.map((t) => (
+        <li key={t} className="flex gap-3 text-[19px] leading-snug">
+          <span className={cx("mt-0.5 grid size-6 shrink-0 place-items-center rounded-full", tone === "dark" ? "bg-signal/20 text-signal" : "bg-cobalt-soft text-cobalt")}>
+            <Check className="size-4" />
+          </span>
+          {t}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Text on the left, real screens on the right. */
+function ShotSlide({ kicker, title, lead, points, children }: { kicker: string; title: ReactNode; lead: ReactNode; points?: string[]; children: ReactNode }) {
+  return (
+    <Frame className="pt-[84px]">
+      <div className="grid h-full grid-cols-[470px_1fr] gap-12">
+        <div className="flex flex-col justify-center">
+          <Kicker>{kicker}</Kicker>
+          <H className="text-[50px] leading-[1.06]">{title}</H>
+          <Lead className="mt-6 text-[21px]">{lead}</Lead>
+          {points && (
+            <div className="rise mt-8" style={d(320)}>
+              <Points items={points} />
+            </div>
+          )}
+        </div>
+        <div className="relative">{children}</div>
+      </div>
+    </Frame>
+  );
+}
+
+function StartSlide() {
+  return (
+    <ShotSlide
+      kicker="Getting started"
+      title="One signature. Two goals."
+      lead="Connect a Sui wallet, then tell Sovra what matters during onboarding."
+      points={["Sign in by signing a message", "No transaction approval, ever", "Sovra never moves your funds"]}
+    >
+      <Shot name="signin" url="/signin" className="pop absolute top-[10px] right-0 h-[380px] w-[600px] rotate-[2deg]" style={d(200)} />
+      <Shot name="onboarding-4" url="/onboarding" className="pop absolute top-[210px] left-0 h-[470px] w-[750px]" style={d(400)} />
+      <div className="pop absolute right-[30px] bottom-[-14px] z-10 flex items-center gap-3 rounded-full bg-card py-2 pr-5 pl-2 shadow-pop ring-1 ring-line" style={d(800)}>
+        <span className="grid size-9 place-items-center rounded-full bg-gain-soft text-gain">
+          <KeyRound className="size-[18px]" />
+        </span>
+        <span className="text-[15px]">
+          <b>Laptop, $1,200</b> <span className="text-muted">and</span> <b>entertainment under $100</b>
+        </span>
+      </div>
+    </ShotSlide>
+  );
+}
+
+function MemorySlide() {
+  return (
+    <ShotSlide
+      kicker="Persistent memory · Walrus"
+      title={
+        <>
+          Everything it <Remembered draw>remembers</Remembered>, in plain words.
+        </>
+      }
+      lead="Review every memory, and stop Sovra using anything that's no longer relevant."
+      points={["Stored on Walrus mainnet", "One namespace per user", "Nothing to repeat when you come back"]}
+    >
+      <Shot name="memory" url="/app/memory" className="pop absolute inset-x-0 top-[20px] h-[600px]" style={d(200)} />
+      <Crop name="crop-onboarding-panel" className="pop absolute right-[-30px] bottom-[-30px] w-[250px] rotate-[2deg]" style={d(700)} />
+    </ShotSlide>
+  );
+}
+
+function TatumSlide() {
+  return (
+    <ShotSlide
+      kicker="Onchain data · Tatum"
+      title="Your goals, next to your real activity."
+      lead="Through Tatum's Sui gateway, Sovra reads your USDC balance and onchain transfers into your transaction history."
+    >
+      <Shot name="overview" url="/app" className="pop absolute inset-x-0 top-[20px] h-[600px]" style={d(200)} />
+      <Crop name="crop-accounts-wallet" className="pop absolute bottom-[10px] left-[30px] w-[380px] -rotate-[1.5deg]" style={d(650)} />
+      <div className="pop absolute right-[-20px] bottom-[40px] z-10 w-[430px] rounded-[14px] bg-card p-2 shadow-pop ring-1 ring-line" style={d(900)}>
+        {[
+          ["25 Oct", "Upwork payout", "+$650.00"],
+          ["23 Oct", "Tunde Bakare", "−$225.00"],
+        ].map(([date, name, amt], i) => (
+          <div key={name} className={cx("flex items-center gap-3 px-3 py-2.5 text-[15px]", i > 0 && "border-t border-line")}>
+            <span className="w-[52px] text-muted">{date}</span>
+            <span className="flex-1 font-medium whitespace-nowrap">{name}</span>
+            <Chip tone="cobalt" className="text-[12px]">Sui wallet</Chip>
+            <span className={cx("w-[78px] text-right font-semibold tabular-nums", amt.startsWith("+") && "text-gain")}>{amt}</span>
+          </div>
+        ))}
+      </div>
+      <div className="rise absolute -top-[46px] left-0 flex items-center gap-3 text-[16px] font-semibold" style={d(400)}>
+        <Chip tone="cobalt" className="px-3.5 py-1.5 text-[15px]">
+          <Brain className="size-4" /> Goals from Walrus
+        </Chip>
+        <span className="text-muted">+</span>
+        <Chip tone="gain" className="px-3.5 py-1.5 text-[15px]">
+          <Wallet className="size-4" /> Activity from Tatum
+        </Chip>
+      </div>
+    </ShotSlide>
+  );
+}
+
+function LearnSlide() {
+  return (
+    <ShotSlide
+      kicker="How Sovra learns"
+      title="Teach it once. It remembers."
+      lead="An Amazon order filed as shopping was really business supplies. Fix it once, and Sovra asks to keep the rule for every future import."
+      points={["Your edit becomes a memory", "Matching transactions are filed for you", "Marked “learned from your edit”"]}
+    >
+      <Shot name="transactions-learn" url="/app/transactions" className="pop absolute inset-x-0 top-[20px] h-[600px]" style={d(200)} />
+      <Crop name="crop-tx-prompt" className="pop absolute top-[300px] right-[-50px] w-[860px] ring-2 ring-highlighter" style={d(700)} />
+    </ShotSlide>
+  );
+}
+
+function BudgetSlide() {
+  return (
+    <ShotSlide
+      kicker="Budgets that look ahead"
+      title="It sees the renewals coming."
+      lead="Spotify and Netflix push entertainment to $111, over the $100 you set. Sovra flags it before the money leaves and suggests pausing Netflix."
+      points={["Scheduled renewals shown hatched", "Protects the laptop goal", "Your choice becomes a memory too"]}
+    >
+      <Shot name="budgets" url="/app/budgets" className="pop absolute inset-x-0 top-[20px] h-[600px]" style={d(200)} />
+      <Crop name="crop-overview-alert" className="pop absolute right-[-40px] bottom-[-30px] w-[520px] rotate-[1deg]" style={d(700)} />
+    </ShotSlide>
+  );
+}
+
+function AskSlide() {
+  return (
+    <ShotSlide
+      kicker="Ask Sovra"
+      title="Ask, and see why."
+      lead="Answers use your real numbers plus the memories that matter, and show which memories they used."
+      points={["Grounded in your budgets, goals and bills", "Lists the memories behind the answer", "No investment, tax or legal advice"]}
+    >
+      <Shot name="ask" url="/app/ask" className="pop absolute inset-x-0 top-[20px] h-[600px]" style={d(200)} />
+      <Crop name="crop-ask-answer" className="pop absolute right-[-40px] bottom-[-34px] w-[560px]" style={d(700)} />
+    </ShotSlide>
+  );
+}
+
+/* Appendix: the rest of the app */
+function GallerySlide() {
+  const items: { shot: ScreenName; url: string; title: string; body: string }[] = [
+    { shot: "goals", url: "/app/goals", title: "Goals", body: "Progress, weekly amounts and forecasts from your statements" },
+    { shot: "recurring", url: "/app/recurring", title: "Recurring", body: "Bills and subscriptions, with reminders and pause" },
+    { shot: "accounts", url: "/app/accounts", title: "Accounts", body: "Statement import and the Sui wallet, read through Tatum" },
+    { shot: "audit", url: "/app/audit", title: "Private audit", body: "Receipts and statements checked inside a NEAR AI TEE" },
+    { shot: "guard", url: "/app/guard", title: "Spending guard", body: "Policies, scam checks and keys for AI agents" },
+    { shot: "overview-lower", url: "/app", title: "Overview", body: "Recent transactions and the laptop fund" },
+  ];
+  return (
+    <Frame className="pt-[80px]">
+      <Kicker>More of Sovra</Kicker>
+      <H className="mt-4 text-[52px]">Everything else in the app.</H>
+      <div className="mt-8 grid grid-cols-3 gap-x-7 gap-y-5">
+        {items.map((it, i) => (
+          <div key={it.title} className="pop" style={d(150 + i * 90)}>
+            <Shot name={it.shot} url={it.url} className="h-[200px]" />
+            <p className="mt-2.5 text-[17px] font-semibold">{it.title}</p>
+            <p className="truncate text-[15px] text-muted">{it.body}</p>
+          </div>
+        ))}
+      </div>
+    </Frame>
+  );
+}
+
 export const SLIDES: SlideDef[] = [
-  { id: "title", title: "Sovra", tone: "light", Component: TitleSlide },
-  { id: "problem", title: "The problem", tone: "dark", Component: ProblemSlide },
-  { id: "solution", title: "Meet Sovra", tone: "light", Component: SolutionSlide },
-  { id: "loop", title: "How it works", tone: "light", Component: LoopSlide },
-  { id: "example", title: "Worked example", tone: "light", Component: ExampleSlide },
-  { id: "stack", title: "Walrus, Tatum and Sui", tone: "light", Component: StackSlide },
-  { id: "trust", title: "Trust and safety", tone: "dark", Component: TrustSlide },
-  { id: "demo", title: "Live demo", tone: "light", Component: DemoSlide },
-  { id: "status", title: "Where we are", tone: "light", Component: StatusSlide },
-  { id: "vision", title: "The vision", tone: "dark", Component: VisionSlide },
-  { id: "close", title: "Try Sovra", tone: "light", Component: CloseSlide },
+  {
+    id: "title",
+    title: "Sovra",
+    tone: "light",
+    Component: TitleSlide,
+    notes: {
+      time: "0:00–0:15",
+      script:
+        "Hey everyone! We're the team behind Sovra. I'm Victor, and together with my teammate Ladipo, we built Sovra for the Walrus and Tatum Total Recall Hackathon.\n\nSovra is a personal finance platform designed around one simple idea: your financial app should remember you.",
+    },
+  },
+  {
+    id: "problem",
+    title: "The problem",
+    tone: "dark",
+    Component: ProblemSlide,
+    notes: {
+      time: "0:15–0:30",
+      script:
+        "Think about how most personal finance platforms work. You set a budget, correct a transaction, explain your spending habits, and set financial goals.\n\nBut when you come back, a lot of that context is gone. You end up repeating the same instructions and correcting the same mistakes.",
+    },
+  },
+  {
+    id: "solution",
+    title: "Meet Sovra",
+    tone: "light",
+    Component: SolutionSlide,
+    notes: {
+      time: "0:30–0:35",
+      script:
+        "We thought there had to be a better way. That's why we built Sovra, a platform that remembers your financial goals, preferences, and decisions, and uses them to make its recommendations more personal.",
+    },
+  },
+  {
+    id: "start",
+    title: "Getting started",
+    tone: "light",
+    Component: StartSlide,
+    notes: {
+      time: "0:35–0:55",
+      script:
+        "Let's walk through how it works.\n\nWe start by connecting a Sui wallet. Authentication only requires signing a message. No transaction approval is needed, and Sovra doesn't move users' funds.\n\nDuring onboarding, we set two preferences: a savings goal of twelve hundred dollars for a laptop, and an entertainment budget of less than a hundred dollars per month.\n\nSovra captures these preferences because they'll be important throughout the experience.",
+    },
+  },
+  {
+    id: "memory",
+    title: "Memory on Walrus",
+    tone: "light",
+    Component: MemorySlide,
+    notes: {
+      time: "0:55–1:15",
+      script:
+        "Here's where things get interesting.\n\nThis is Sovra's Memory page. We can see everything the platform remembers about the user, in plain language.\n\nUsers can review their memories and stop Sovra from using information that is no longer relevant.\n\nWe're using Walrus to store these memories persistently, so users don't have to start from scratch every time they return.\n\nThe idea is simple: your financial context should stay with you.",
+    },
+  },
+  {
+    id: "tatum",
+    title: "Onchain data with Tatum",
+    tone: "light",
+    Component: TatumSlide,
+    notes: {
+      time: "1:15–1:35",
+      script:
+        "But remembering financial goals is only one part of the equation. Sovra also needs to understand what's actually happening with your finances.\n\nThrough Tatum's Sui gateway, we retrieve the user's USDC balance and onchain transfers, bringing that activity directly into Sovra's transaction history.\n\nNow we have two important things working together: the user's financial goals and their actual financial activity.",
+    },
+  },
+  {
+    id: "learn",
+    title: "How Sovra learns",
+    tone: "light",
+    Component: LearnSlide,
+    notes: {
+      time: "1:35–2:00",
+      script:
+        "Let's look at a practical example.\n\nHere, we have an Amazon transaction categorized as shopping. But let's say this purchase was actually for business supplies.\n\nWe change the category, and Sovra asks whether future Amazon purchases should also be categorized as business supplies.\n\nWe confirm, and that preference is saved as a new memory.\n\nThe next time a matching transaction comes in, Sovra can apply that preference automatically.\n\nInstead of correcting the same mistake over and over, users teach Sovra once, and it remembers.",
+    },
+  },
+  {
+    id: "budgets",
+    title: "Budgets that look ahead",
+    tone: "light",
+    Component: BudgetSlide,
+    notes: {
+      time: "2:00–2:25",
+      script:
+        "Now, let's look at budgeting.\n\nWe've set our entertainment limit at a hundred dollars. But Spotify and Netflix are both due to renew this month.\n\nTogether, they'll push our entertainment spending to a hundred and eleven dollars, exceeding the budget.\n\nSovra identifies this before the expenses hit and suggests pausing Netflix to help us stay within our limit and protect our laptop savings goal.\n\nSo rather than simply showing users where their money went, Sovra helps them think ahead.",
+    },
+  },
+  {
+    id: "ask",
+    title: "Ask Sovra",
+    tone: "light",
+    Component: AskSlide,
+    notes: {
+      time: "2:25–2:45",
+      script:
+        "And sometimes, we don't want to navigate through different pages. We just want to ask a question.\n\nFor example: 'Can I afford a sixty-dollar concert this weekend?'\n\nSovra considers our actual financial data alongside relevant saved memories to generate a recommendation.\n\nIt also shows which memories informed its response, so users can understand the context behind the advice.",
+    },
+  },
+  {
+    id: "close",
+    title: "Thank you",
+    tone: "light",
+    Component: CloseSlide,
+    notes: {
+      time: "2:45–3:00",
+      script:
+        "And that's Sovra.\n\nWe've brought together persistent memory through Walrus and onchain financial data through Tatum to create a personal finance platform that remembers more than just transactions.\n\nBecause personal finance isn't just about knowing where your money goes. It's about understanding what you're working toward.\n\nWe're the team behind Sovra. Thank you!",
+    },
+  },
+  // Appendix: for questions after the pitch.
+  { id: "gallery", title: "Appendix · More of Sovra", tone: "light", Component: GallerySlide, appendix: true },
+  { id: "example", title: "Appendix · Worked example", tone: "light", Component: ExampleSlide, appendix: true },
+  { id: "loop", title: "Appendix · The learning loop", tone: "light", Component: LoopSlide, appendix: true },
+  { id: "stack", title: "Appendix · Walrus, Tatum and Sui", tone: "light", Component: StackSlide, appendix: true },
+  { id: "trust", title: "Appendix · Trust and safety", tone: "dark", Component: TrustSlide, appendix: true },
+  { id: "demo", title: "Appendix · Backup demo", tone: "light", Component: DemoSlide, appendix: true },
+  { id: "status", title: "Appendix · Where we are", tone: "light", Component: StatusSlide, appendix: true },
 ];
+
+/** Total length of the pitch, for the presenter timer. */
+export const PITCH_SECONDS = 180;
