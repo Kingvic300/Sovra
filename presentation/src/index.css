@@ -1,0 +1,212 @@
+@import "tailwindcss";
+
+/* Sovra "Porcelain" tokens, same values as frontend/src/index.css. */
+@theme {
+  --color-porcelain: #ebf0f6;
+  --color-card: #ffffff;
+  --color-ink: #0f1b33;
+  --color-ink-2: #17264a;
+  --color-muted: #56657e;
+  --color-line: #d5dde8;
+  --color-track: #e3e9f1;
+  --color-cobalt: #2340d0;
+  --color-cobalt-deep: #1a32a8;
+  --color-cobalt-soft: #e8ecfc;
+  --color-highlighter: #ffe15a;
+  --color-signal: #4f7bff;
+  --color-gain: #0b6e4c;
+  --color-gain-soft: #e3f3ec;
+  --color-caution: #945800;
+  --color-caution-soft: #fbf0dc;
+  --color-over: #b02a32;
+  --color-over-soft: #fbe6e7;
+
+  --font-sans: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 18px;
+  --shadow-card: 0 1px 2px rgb(15 27 51 / 0.05), 0 14px 36px -18px rgb(15 27 51 / 0.25);
+  --shadow-pop: 0 2px 4px rgb(15 27 51 / 0.06), 0 28px 60px -20px rgb(15 27 51 / 0.35);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    background: var(--color-ink);
+    color: var(--color-ink);
+  }
+  body {
+    overflow: hidden;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 3px;
+  }
+  ::selection {
+    background: var(--color-highlighter);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  /* Highlighter stroke on facts Sovra remembers. */
+  .remembered {
+    padding: 0 0.12em;
+    margin: 0 -0.04em;
+    border-radius: 0.12em;
+    color: var(--color-ink);
+    background: linear-gradient(104deg, transparent 0 2%, var(--color-highlighter) 3% 96%, transparent 98%);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  /* Animated version: the stroke draws in left to right. */
+  /* Used on display headings: a shorter stroke that sits low, so it never covers the line above. */
+  .remembered-draw {
+    background-size: 0% 74%;
+    background-position: 0 88%;
+    background-repeat: no-repeat;
+    animation: draw-highlight 0.7s 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  .hatch-over {
+    background: repeating-linear-gradient(-45deg, var(--color-over) 0 3px, transparent 3px 7px);
+  }
+  .hatch-ink {
+    background: repeating-linear-gradient(-45deg, var(--color-muted) 0 3px, transparent 3px 7px);
+  }
+  .grid-dots {
+    background-image: radial-gradient(rgb(15 27 51 / 0.09) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .grid-dots-dark {
+    background-image: radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* Entrance animation for slide content. Stagger with --d. */
+  .rise {
+    opacity: 0;
+    animation: rise 0.6s calc(var(--d, 0) * 1ms) cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  .pop {
+    opacity: 0;
+    animation: pop 0.5s calc(var(--d, 0) * 1ms) cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+  }
+  .grow-x {
+    transform-origin: left;
+    transform: scaleX(0);
+    animation: grow-x 0.9s calc(var(--d, 0) * 1ms) cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+
+  /* Thumbnails in the slide overview render a frozen final state. */
+  .frozen .rise,
+  .frozen .pop,
+  .frozen .grow-x,
+  .frozen .remembered-draw {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .frozen .remembered-draw {
+    background-size: 100% 74%;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes grow-x {
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes draw-highlight {
+  to {
+    background-size: 100% 74%;
+  }
+}
+@keyframes slide-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slide-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-48px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(79 123 255 / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgb(79 123 255 / 0);
+  }
+}
+@keyframes dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes spin {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(90deg);
+  }
+}
